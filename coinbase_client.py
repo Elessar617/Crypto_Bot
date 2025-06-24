@@ -3,6 +3,7 @@
 import uuid
 from typing import Optional, Dict, Any, List
 import sys
+from requests.exceptions import HTTPError, RequestException
 
 from coinbase.rest import RESTClient  # type: ignore[import]
 
@@ -18,8 +19,12 @@ class CoinbaseClient:
     """A client to interact with the Coinbase Advanced Trade API."""
 
     # Rule: Use a minimum of two runtime assertions per function (applied in __init__).
-    def __init__(self) -> None:
-        """Initializes the CoinbaseClient with API credentials and the REST client."""
+    def __init__(self, api_url: Optional[str] = None) -> None:
+        """Initializes the CoinbaseClient with API credentials and the REST client.
+
+        Args:
+            api_url (Optional[str]): The API URL to use for requests. Defaults to production.
+        """
         self.logger = logger.get_logger()
 
         # Load API credentials from config
@@ -39,12 +44,17 @@ class CoinbaseClient:
         ), "API secret must be a non-empty string."
 
         try:
-            self.client = RESTClient(
-                api_key=self.api_key,
-                api_secret=self.api_secret,
-                rate_limit_headers=True,  # Enable to help manage rate limits effectively
-            )
-            self.logger.info("Coinbase RESTClient initialized successfully.")
+            client_params = {
+                "api_key": self.api_key,
+                "api_secret": self.api_secret,
+                "rate_limit_headers": True,
+            }
+            if api_url:
+                client_params["base_url"] = api_url
+
+            self.client = RESTClient(**client_params)
+            log_url = api_url if api_url else "production"
+            self.logger.info(f"Coinbase RESTClient initialized successfully for {log_url} URL.")
         except Exception as e:
             self.logger.error(
                 f"Failed to initialize Coinbase RESTClient: {e}", exc_info=True
@@ -105,11 +115,22 @@ class CoinbaseClient:
                 ), "Not all items in accounts list are dictionaries."
 
             return accounts_data
+        except HTTPError as e:
+            self.logger.error(
+                f"HTTP error retrieving accounts: {e.response.status_code} {e.response.text}",
+                exc_info=True,
+            )
+            return None
+        except RequestException as e:
+            self.logger.error(
+                f"Request exception retrieving accounts: {e}", exc_info=True
+            )
+            return None
         except Exception as e:
-            self.logger.error(f"Error retrieving accounts: {e}", exc_info=True)
-            # accounts_data remains None, will be returned
-
-        return accounts_data
+            self.logger.error(
+                f"An unexpected error occurred while retrieving accounts: {e}", exc_info=True
+            )
+            return None
 
     def get_product_candles(
         self,
@@ -200,9 +221,20 @@ class CoinbaseClient:
                 )
 
             return actual_candles
+        except HTTPError as e:
+            self.logger.error(
+                f"HTTP error retrieving candles for {product_id}: {e.response.status_code} {e.response.text}",
+                exc_info=True,
+            )
+            return None
+        except RequestException as e:
+            self.logger.error(
+                f"Request exception retrieving candles for {product_id}: {e}", exc_info=True
+            )
+            return None
         except Exception as e:
             self.logger.error(
-                f"Error retrieving product candles for {product_id}: {e}", exc_info=True
+                f"An unexpected error occurred while retrieving candles for {product_id}: {e}", exc_info=True
             )
             return None
 
@@ -263,9 +295,20 @@ class CoinbaseClient:
                 ), "Book data is missing 'bids' or 'asks'."
 
             return book_data
+        except HTTPError as e:
+            self.logger.error(
+                f"HTTP error retrieving order book for {product_id}: {e.response.status_code} {e.response.text}",
+                exc_info=True,
+            )
+            return None
+        except RequestException as e:
+            self.logger.error(
+                f"Request exception retrieving order book for {product_id}: {e}", exc_info=True
+            )
+            return None
         except Exception as e:
             self.logger.error(
-                f"Error retrieving order book for {product_id}: {e}", exc_info=True
+                f"An unexpected error occurred while retrieving order book for {product_id}: {e}", exc_info=True
             )
             return None
 
@@ -343,9 +386,20 @@ class CoinbaseClient:
 
             return product_data
 
+        except HTTPError as e:
+            self.logger.error(
+                f"HTTP error retrieving product {product_id}: {e.response.status_code} {e.response.text}",
+                exc_info=True,
+            )
+            return None
+        except RequestException as e:
+            self.logger.error(
+                f"Request exception retrieving product {product_id}: {e}", exc_info=True
+            )
+            return None
         except Exception as e:
             self.logger.error(
-                f"Exception retrieving product {product_id}: {e}", exc_info=True
+                f"An unexpected error occurred while retrieving product {product_id}: {e}", exc_info=True
             )
             return None
 
@@ -443,9 +497,21 @@ class CoinbaseClient:
                     f"Limit buy order failed for {product_id}. Reason: {failure_reason}"
                 )
                 return None
+        except HTTPError as e:
+            self.logger.error(
+                f"HTTP error placing limit buy order for {product_id}: {e.response.status_code} {e.response.text}",
+                exc_info=True,
+            )
+            return None
+        except RequestException as e:
+            self.logger.error(
+                f"Request exception placing limit buy order for {product_id}: {e}",
+                exc_info=True,
+            )
+            return None
         except Exception as e:
             self.logger.error(
-                f"Exception placing limit buy order for {product_id}: {e}",
+                f"An unexpected error occurred while placing limit buy order for {product_id}: {e}",
                 exc_info=True,
             )
             return None
@@ -544,9 +610,21 @@ class CoinbaseClient:
                     f"Limit sell order failed for {product_id}. Reason: {failure_reason}"
                 )
                 return None
+        except HTTPError as e:
+            self.logger.error(
+                f"HTTP error placing limit sell order for {product_id}: {e.response.status_code} {e.response.text}",
+                exc_info=True,
+            )
+            return None
+        except RequestException as e:
+            self.logger.error(
+                f"Request exception placing limit sell order for {product_id}: {e}",
+                exc_info=True,
+            )
+            return None
         except Exception as e:
             self.logger.error(
-                f"Exception placing limit sell order for {product_id}: {e}",
+                f"An unexpected error occurred while placing limit sell order for {product_id}: {e}",
                 exc_info=True,
             )
             return None
@@ -582,11 +660,17 @@ class CoinbaseClient:
                 )
                 return None
 
-        except Exception as e:
+        except HTTPError as e:
             # The API returns a 404 error if the order is not found, which the library may raise as an exception.
             self.logger.error(
-                f"Failed to retrieve order {order_id}: {e}", exc_info=True
+                f"HTTP error retrieving order {order_id}: {e.response.status_code} {e.response.text}", exc_info=True
             )
+            return None
+        except RequestException as e:
+            self.logger.error(f"Request exception retrieving order {order_id}: {e}", exc_info=True)
+            return None
+        except Exception as e:
+            self.logger.error(f"An unexpected error occurred while retrieving order {order_id}: {e}", exc_info=True)
             return None
 
     def cancel_orders(
@@ -656,9 +740,20 @@ class CoinbaseClient:
                     # This path might mean the entire batch failed for some reason not detailed per order.
 
             return response
+        except HTTPError as e:
+            self.logger.error(
+                f"HTTP error cancelling orders {order_ids}: {e.response.status_code} {e.response.text}",
+                exc_info=True,
+            )
+            return None
+        except RequestException as e:
+            self.logger.error(
+                f"Request exception cancelling orders {order_ids}: {e}", exc_info=True
+            )
+            return None
         except Exception as e:
             self.logger.error(
-                f"Exception cancelling orders {order_ids}: {e}", exc_info=True
+                f"An unexpected error occurred while cancelling orders {order_ids}: {e}", exc_info=True
             )
             return None
 
