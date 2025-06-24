@@ -214,5 +214,5 @@ This section tracks the development progress of the Crypto Trading Bot v6.
 *   [X] Review all code for adherence to NASA Power of 10 and other user-defined coding standards.
 *   [X] Run all linters (`mypy`, `black`, `flake8`, `bandit`) and address all reported issues.
 *   [X] Ensure all unit tests pass and aim for high test coverage.
-*   [ ] Update/create a comprehensive `README.md` for setup, configuration, and execution.
+*   [X] Update/create a comprehensive `README.md` for setup, configuration, and execution.
 *   [ ] Manually test the bot in a controlled environment if possible (e.g., with very small amounts or against a sandbox if available, though Coinbase Advanced Trade sandbox is limited).

@@ -6,10 +6,8 @@
 *.key
 credentials.json
 
-# CSV position files / Buy price files
-*_position.csv
-*.csv
-*_buy_price.txt
+# Bot data (logs, trade state files)
+bot_data/
 
 # Python bytecode
 __pycache__/
