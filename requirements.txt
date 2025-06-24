@@ -14,6 +14,7 @@ mypy==1.5.1           # For static type checking
 black==23.7.0          # For consistent code formatting
 flake8==6.1.0         # For code style and quality checks (PEP8)
 bandit==1.7.5         # For finding common security issues
+pytest-cov==4.1.0     # For code coverage analysis with pytest
 
 # Documentation
 # sphinx==7.1.2       # Uncomment if Sphinx documentation will be generated

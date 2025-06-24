@@ -217,24 +217,37 @@ This section tracks the development progress of the Crypto Trading Bot v6.
 *   [X] Update/create a comprehensive `README.md` for setup, configuration, and execution.
 *   [X] Manually test the bot in a controlled environment if possible (e.g., with very small amounts or against a sandbox if available, though Coinbase Advanced Trade sandbox is limited).
 
-## V. Test Suite Refactoring & Technical Debt
+## V. Test Suite Refactoring & Stability (Completed)
 
-This phase focuses on improving the quality, maintainability, and organization of the existing test suite.
+This phase focused on improving the quality, maintainability, and organization of the existing test suite.
 
-*   [ ] **Review and Refactor Existing Tests:**
-    *   Analyze all tests in `tests/` for clarity, efficiency, and adherence to best practices (e.g., DRY principle).
-    *   Refactor complex or brittle tests to make them more robust and easier to understand.
+*   [X] **Review and Refactor Existing Tests:**
+    *   Analyzed all tests in `tests/` for clarity, efficiency, and adherence to best practices.
+    *   Refactored brittle tests to make them more robust, particularly by fixing mock strategies and aligning assertions.
+*   [X] **Improve Mocking Strategies:**
+    *   Ensured mocks are narrowly scoped and specific to the unit under test.
+    *   Stabilized integration tests by mocking external API calls, making the test suite independent of sandbox availability.
 *   [ ] **Consolidate Test Helpers and Fixtures:**
     *   Identify common setup logic, mock objects, and test data.
     *   Create shared `pytest` fixtures in `tests/conftest.py` to remove duplication.
     *   Develop helper functions for generating common test data (e.g., mock API responses).
-*   [ ] **Improve Mocking Strategies:**
-    *   Ensure mocks are narrowly scoped and specific to the unit under test.
-    *   Replace broad `unittest.mock.patch` calls with more targeted fixtures where appropriate.
-    *   Verify that mocks accurately represent the behavior of the real components.
-*   [ ] **Enhance Test Coverage and Scenarios:**
-    *   Identify any gaps in test coverage for critical logic paths.
-    *   Add tests for edge cases, error conditions, and invalid inputs that may have been missed.
 *   [ ] **Standardize Test Structure:**
     *   Ensure a consistent structure across all test files for better readability.
     *   Organize tests logically within classes or modules.
+
+## VI. Code Coverage Improvement (>90%)
+
+This phase focuses on increasing the test coverage to over 90% for all critical modules, ensuring the bot's logic is robust and well-verified.
+
+*   [ ] **Overall Goal:** Achieve and maintain >90% code coverage.
+*   [ ] **Module: `coinbase_client.py` (Current: 54%)**
+    *   [ ] Add tests for `HTTPError` exception handling in all relevant methods.
+    *   [ ] Add tests for `RequestException` handling.
+    *   [ ] Add tests for unexpected `Exception` scenarios.
+    *   [ ] Add tests for different API response formats and edge cases (e.g., empty lists, missing keys).
+*   [ ] **Module: `trading_logic.py` (Current: 40%)**
+    *   [ ] Add tests to cover all logical branches in `should_buy_asset` and `should_sell_asset`.
+    *   [ ] Add tests for the helper functions that determine sell order parameters.
+    *   [ ] Write comprehensive tests for `process_asset_trade_cycle` to simulate various states (e.g., partially filled orders, API failures during the cycle).
+*   [ ] **Module: `logger.py` (Current: 70%)**
+    *   [ ] Add tests for file I/O error handling during logger setup.
