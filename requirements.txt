@@ -1,0 +1,22 @@
+# Core Trading Logic & API
+pandas==2.0.3         # For data manipulation, used by 'ta'
+numpy==1.26.4         # For numerical operations, used by 'ta' and 'pandas'
+ta==0.10.2            # For technical analysis indicators like RSI
+coinbase-advanced-py==1.8.2 # For Coinbase Advanced Trade API interaction
+python-dotenv==0.21.0 # For loading environment variables from .env file
+
+# Typing & Language Features
+typing-extensions==4.7.1 # For advanced typing features
+
+# Development & Linting Tools
+pytest==7.4.0         # For running automated tests
+mypy==1.5.1           # For static type checking
+black==23.7.0          # For consistent code formatting
+flake8==6.1.0         # For code style and quality checks (PEP8)
+bandit==1.7.5         # For finding common security issues
+
+# Documentation
+# sphinx==7.1.2       # Uncomment if Sphinx documentation will be generated
+
+# Additional type stubs (if needed by mypy for better type checking)
+# types-requests==2.31.0.2 # Example, coinbase-advanced-py might use requests

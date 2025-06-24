@@ -1,0 +1,12 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203, W503
+per-file-ignores =
+    tests/test_coinbase_client.py:E501
+    tests/test_config.py:E501
+    tests/test_logger.py:E501
+    tests/test_technical_analysis.py:E501
+    coinbase_client.py:E501
+    config.py:E501
+    logger.py:E501
+    technical_analysis.py:E501
