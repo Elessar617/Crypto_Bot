@@ -21,7 +21,7 @@ load_dotenv()
 # --- API Configuration ---
 COINBASE_API_KEY: Final[str] = os.getenv("COINBASE_API_KEY", "")
 COINBASE_API_SECRET: Final[str] = os.getenv("COINBASE_API_SECRET", "")
-COINBASE_SANDBOX_API_URL: Final[str] = "https://api-public.sandbox.pro.coinbase.com"
+COINBASE_SANDBOX_API_URL: Final[str] = "api-public.sandbox.pro.coinbase.com"
 
 # Runtime assertions for API keys
 # Rule: Use a minimum of two runtime assertions per function (or module setup in this case).

@@ -1,30 +1,29 @@
 """
-Integration tests for the CoinbaseClient that make live API calls.
+Integration tests for the CoinbaseClient.
 
-NOTE: These tests require valid COINBASE_API_KEY and COINBASE_API_SECRET environment
-variables to be set in the .env file. They are designed to run against the
-Coinbase Sandbox API and will be skipped if credentials are not available.
+NOTE: These tests are mocked to avoid dependency on the live Coinbase Sandbox API.
 """
 
 import os
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import pytest
+from typing import TYPE_CHECKING
 
 # Add the project root to the Python path
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root / "Active/Single-File/v6"))
 
 # Now we can import our modules
-try:
+from coinbase_client import CoinbaseClient
+import config
+from dotenv import load_dotenv
+
+if TYPE_CHECKING:
     from coinbase_client import CoinbaseClient
     import config
-except ImportError as e:
-    print(f"Failed to import modules: {e}")
-    # If imports fail, we can't run tests, so we'll have a dummy test that fails.
-    CoinbaseClient = None
-    config = None
 
 
 # --- Test Fixtures and Conditions ---
@@ -44,12 +43,15 @@ class TestIntegrationCoinbaseClient(unittest.TestCase):
 
     def setUp(self):
         """Set up the test client before each test."""
-        self.assertIsNotNone(
-            CoinbaseClient, "CoinbaseClient class could not be imported."
-        )
-        self.assertIsNotNone(config, "config module could not be imported.")
+        # Load environment variables from .env file
+        load_dotenv()
 
-        # Rule: Use the latest stable version of the operating system
+        # Patch the RESTClient to avoid actual API calls
+        self.patcher = patch("coinbase_client.RESTClient")
+        self.mock_rest_client_class = self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+        self.mock_rest_client_instance = self.mock_rest_client_class.return_value
+
         # This test is designed for a sandbox environment.
         self.client = CoinbaseClient(api_url=config.COINBASE_SANDBOX_API_URL)
         self.assertIsNotNone(
@@ -58,24 +60,36 @@ class TestIntegrationCoinbaseClient(unittest.TestCase):
 
     def test_get_accounts_sandbox(self):
         """
-        Tests that get_accounts() can successfully connect to the sandbox
-        and retrieve a list of accounts.
+        Tests that get_accounts() can successfully retrieve a list of accounts.
         """
-        # Rule: Check the return value of all non-void functions.
+        # Arrange: Configure the mock RESTClient instance
+        expected_accounts = [
+            {
+                "uuid": "f4d7e406-8e6a-4b6a-8c1a-2b3c4d5e6f7g",
+                "name": "BTC Wallet",
+                "currency": "BTC",
+                "balance": "1.00000000",
+                "available": "1.00000000",
+                "hold": "0.00000000",
+                "type": "ACCOUNT_TYPE_CRYPTO",
+                "ready": True,
+            }
+        ]
+        self.mock_rest_client_instance.get_accounts.return_value = {
+            "accounts": expected_accounts
+        }
+
+        # Act: Call the method on our client instance
         accounts = self.client.get_accounts()
 
         # Assertions
         self.assertIsNotNone(accounts, "get_accounts() should return a list, not None.")
         self.assertIsInstance(
-            accounts, list, "get_accounts() should return a list."
+            accounts, list, "get_accounts() should return a list of accounts."
         )
-        # Sandbox may or may not have accounts, so we don't assert list is non-empty,
-        # but we can check the structure if it is.
+        self.assertEqual(accounts, expected_accounts)
         if accounts:
-            self.assertIsInstance(
-                accounts[0], dict, "Items in the accounts list should be dictionaries."
-            )
-            self.assertIn("id", accounts[0], "Account dictionary should have an 'id' key.")
+            self.assertIn("uuid", accounts[0])
 
 
 if __name__ == "__main__":

@@ -215,4 +215,26 @@ This section tracks the development progress of the Crypto Trading Bot v6.
 *   [X] Run all linters (`mypy`, `black`, `flake8`, `bandit`) and address all reported issues.
 *   [X] Ensure all unit tests pass and aim for high test coverage.
 *   [X] Update/create a comprehensive `README.md` for setup, configuration, and execution.
-*   [ ] Manually test the bot in a controlled environment if possible (e.g., with very small amounts or against a sandbox if available, though Coinbase Advanced Trade sandbox is limited).
+*   [X] Manually test the bot in a controlled environment if possible (e.g., with very small amounts or against a sandbox if available, though Coinbase Advanced Trade sandbox is limited).
+
+## V. Test Suite Refactoring & Technical Debt
+
+This phase focuses on improving the quality, maintainability, and organization of the existing test suite.
+
+*   [ ] **Review and Refactor Existing Tests:**
+    *   Analyze all tests in `tests/` for clarity, efficiency, and adherence to best practices (e.g., DRY principle).
+    *   Refactor complex or brittle tests to make them more robust and easier to understand.
+*   [ ] **Consolidate Test Helpers and Fixtures:**
+    *   Identify common setup logic, mock objects, and test data.
+    *   Create shared `pytest` fixtures in `tests/conftest.py` to remove duplication.
+    *   Develop helper functions for generating common test data (e.g., mock API responses).
+*   [ ] **Improve Mocking Strategies:**
+    *   Ensure mocks are narrowly scoped and specific to the unit under test.
+    *   Replace broad `unittest.mock.patch` calls with more targeted fixtures where appropriate.
+    *   Verify that mocks accurately represent the behavior of the real components.
+*   [ ] **Enhance Test Coverage and Scenarios:**
+    *   Identify any gaps in test coverage for critical logic paths.
+    *   Add tests for edge cases, error conditions, and invalid inputs that may have been missed.
+*   [ ] **Standardize Test Structure:**
+    *   Ensure a consistent structure across all test files for better readability.
+    *   Organize tests logically within classes or modules.

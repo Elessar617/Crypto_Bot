@@ -29,9 +29,9 @@ def should_buy_asset(
         True if the buying conditions are met, False otherwise.
 
     Buy Conditions:
-    1. Current 14-period RSI (e.g., 15-min candles) > buy_rsi_threshold.
-    2. Previous RSI <= buy_rsi_threshold.
-    3. One of the 3 prior RSIs (before the 'previous' one) < buy_rsi_threshold.
+    1. Current 14-period RSI (e.g., 15-min candles) > rsi_oversold_threshold.
+    2. Previous RSI <= rsi_oversold_threshold.
+    3. One of the 3 prior RSIs (before the 'previous' one) < rsi_oversold_threshold.
     """
     # Assertion 1: Validate rsi_series input
     assert rsi_series is not None, "RSI series cannot be None."
@@ -50,12 +50,14 @@ def should_buy_asset(
         "rsi_oversold_threshold" in config_asset_params
     ), "'rsi_oversold_threshold' missing from config_asset_params."
 
-    buy_rsi_threshold = config_asset_params["rsi_oversold_threshold"]
-    # Assertion 4: Validate buy_rsi_threshold type and value (optional, but good practice)
+    rsi_oversold_threshold = config_asset_params["rsi_oversold_threshold"]
+    # Assertion 4: Validate rsi_oversold_threshold type and value (optional, but good practice)
     assert isinstance(
-        buy_rsi_threshold, (int, float)
-    ), "'buy_rsi_threshold' must be a number."
-    assert 0 < buy_rsi_threshold < 100, "'buy_rsi_threshold' must be between 0 and 100."
+        rsi_oversold_threshold, (int, float)
+    ), "'rsi_oversold_threshold' must be a number."
+    assert (
+        0 < rsi_oversold_threshold < 100
+    ), "'rsi_oversold_threshold' must be between 0 and 100."
 
     # Extract relevant RSI values
     # Pandas series are 0-indexed. iloc[-1] is the last, iloc[-2] is second to last, etc.
@@ -67,9 +69,9 @@ def should_buy_asset(
 
     # Combine all conditions into a single boolean expression for clarity and conciseness.
     buy_signal = (
-        current_rsi > buy_rsi_threshold
-        and previous_rsi <= buy_rsi_threshold
-        and any(rsi < buy_rsi_threshold for rsi in prior_rsis)
+        current_rsi > rsi_oversold_threshold
+        and previous_rsi <= rsi_oversold_threshold
+        and any(rsi < rsi_oversold_threshold for rsi in prior_rsis)
     )
 
     return buy_signal

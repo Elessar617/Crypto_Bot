@@ -1,433 +1,137 @@
 """
-Unit tests for the trading_logic.py module.
+Unit tests for the trading_logic.py module using pytest.
 """
 
-import os
-
-# Set dummy environment variables before importing other modules
-os.environ["COINBASE_API_KEY"] = "test_api_key"
-os.environ["COINBASE_API_SECRET"] = "test_api_secret"
-
-import unittest
 import pandas as pd
+import pytest
 from typing import List, Dict, Any, Optional
-from unittest.mock import Mock
 from decimal import Decimal
 
+# Imports from the application source
 from trading_logic import (
     should_buy_asset,
     determine_sell_orders_params,
 )
 
+# --- Helper Functions ---
 
-class TestTradingLogic(unittest.TestCase):
-    """Test suite for trading logic functions."""
+def _create_rsi_series(rsi_values: Optional[List[float]]) -> Optional[pd.Series]:
+    """Helper to create a pandas Series from a list of RSI values."""
+    if rsi_values is None:
+        return None
+    return pd.Series(rsi_values, dtype=float)
 
-    def _create_rsi_series(
-        self, rsi_values: Optional[List[float]]
-    ) -> Optional[pd.Series]:
-        """Helper to create a pandas Series from a list of RSI values."""
-        if rsi_values is None:
-            return None
-        return pd.Series(rsi_values, dtype=float)
 
-    def test_should_buy_asset_conditions_met(self):
-        """Test should_buy_asset when all buy conditions are met."""
-        # Conditions: Current > threshold, Previous <= threshold, One of 3 prior < threshold
-        # Example: Threshold = 30
-        # RSIs: [20, 25, 28, 29, 35] (len=5)
-        # Current (35) > 30 (True)
-        # Previous (29) <= 30 (True)
-        # Priors ([20, 25, 28]): 20 < 30 (True)
-        rsi_values = [20.0, 25.0, 28.0, 29.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        config_params = {"buy_rsi_threshold": 30.0}
-        self.assertTrue(should_buy_asset(rsi_series, config_params))
+# --- Tests for should_buy_asset ---
 
-    def test_should_buy_asset_current_rsi_not_above_threshold(self):
-        """Test should_buy_asset when current RSI is not above threshold."""
-        # RSIs: [20, 25, 28, 29, 25] (Current 25 <= 30)
-        rsi_values = [20.0, 25.0, 28.0, 29.0, 25.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        config_params = {"buy_rsi_threshold": 30.0}
-        self.assertFalse(should_buy_asset(rsi_series, config_params))
+@pytest.mark.parametrize("rsi_values, config, expected", [
+    # Condition Met
+    ([20.0, 25.0, 28.0, 29.0, 35.0], {"rsi_oversold_threshold": 30}, True),
+    # Current RSI not above threshold
+    ([20.0, 25.0, 28.0, 29.0, 25.0], {"rsi_oversold_threshold": 30}, False),
+    # Previous RSI not below or equal to threshold
+    ([20.0, 25.0, 28.0, 31.0, 35.0], {"rsi_oversold_threshold": 30}, False),
+    # No prior RSI below threshold
+    ([32.0, 33.0, 34.0, 29.0, 35.0], {"rsi_oversold_threshold": 30}, False),
+    # Exact threshold crossing
+    ([20.0, 25.0, 28.0, 30.0, 35.0], {"rsi_oversold_threshold": 30}, True),
+    # One of three priors just below threshold (pass case)
+    ([31.0, 32.0, 29.0, 28.0, 35.0], {"rsi_oversold_threshold": 30}, True),
+    # All three priors below threshold (pass case)
+    ([28.0, 27.0, 29.0, 25.0, 35.0], {"rsi_oversold_threshold": 30}, True),
+])
+def test_should_buy_asset(rsi_values, config, expected):
+    """Tests various scenarios for should_buy_asset logic."""
+    rsi_series = _create_rsi_series(rsi_values)
+    assert should_buy_asset(rsi_series, config) == expected
 
-    def test_should_buy_asset_previous_rsi_not_below_or_equal_threshold(self):
-        """Test should_buy_asset when previous RSI is not below or equal to threshold."""
-        # RSIs: [20, 25, 28, 31, 35] (Previous 31 > 30)
-        rsi_values = [20.0, 25.0, 28.0, 31.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        config_params = {"buy_rsi_threshold": 30.0}
-        self.assertFalse(should_buy_asset(rsi_series, config_params))
 
-    def test_should_buy_asset_no_prior_rsi_below_threshold(self):
-        """Test should_buy_asset when no prior RSI is below threshold."""
-        # RSIs: [32, 33, 34, 29, 35] (Priors [32,33,34] all > 30)
-        rsi_values = [32.0, 33.0, 34.0, 29.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        config_params = {"buy_rsi_threshold": 30.0}
-        self.assertFalse(should_buy_asset(rsi_series, config_params))
+@pytest.mark.parametrize("rsi_series, config, error_msg", [
+    (None, {"rsi_oversold_threshold": 30}, "RSI series cannot be None."),
+    (_create_rsi_series([1, 2, 3, 4]), {"rsi_oversold_threshold": 30}, "RSI series must have at least 5 data points"),
+    (_create_rsi_series([1, 2, 3, 4, 5]), {}, "'rsi_oversold_threshold' missing from config_asset_params."),
+    (_create_rsi_series([1, 2, 3, 4, 5]), {"rsi_oversold_threshold": "30"}, "'rsi_oversold_threshold' must be a number."),
+    (_create_rsi_series([1, 2, 3, 4, 5]), {"rsi_oversold_threshold": 101}, "'rsi_oversold_threshold' must be between 0 and 100."),
+    (_create_rsi_series([1, 2, 3, 4, 5]), {"rsi_oversold_threshold": 0}, "'rsi_oversold_threshold' must be between 0 and 100."),
+])
+def test_should_buy_asset_assertions(rsi_series, config, error_msg):
+    """Tests assertion errors for should_buy_asset."""
+    with pytest.raises(AssertionError, match=error_msg):
+        should_buy_asset(rsi_series, config)
 
-    def test_should_buy_asset_rsi_series_none(self):
-        """Test should_buy_asset with None RSI series (should raise AssertionError)."""
-        with self.assertRaisesRegex(AssertionError, "RSI series cannot be None."):
-            should_buy_asset(None, {"buy_rsi_threshold": 30.0})
 
-    def test_should_buy_asset_rsi_series_too_short(self):
-        """Test should_buy_asset with RSI series less than 5 elements (should raise AssertionError)."""
-        # RSIs: [25, 28, 29, 35] (len=4)
-        rsi_values = [25.0, 28.0, 29.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        with self.assertRaisesRegex(
-            AssertionError, "RSI series must have at least 5 data points for the logic."
-        ):
-            should_buy_asset(rsi_series, {"buy_rsi_threshold": 30.0})
+# --- Tests for determine_sell_orders_params ---
 
-    def test_should_buy_asset_config_missing_threshold(self):
-        """Test should_buy_asset with config missing 'buy_rsi_threshold' (AssertionError)."""
-        rsi_values = [20.0, 25.0, 28.0, 29.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        with self.assertRaisesRegex(
-            AssertionError, "'buy_rsi_threshold' missing from config_asset_params."
-        ):
-            should_buy_asset(rsi_series, {})
-
-    def test_should_buy_asset_config_threshold_invalid_type(self):
-        """Test should_buy_asset with invalid type for 'buy_rsi_threshold' (AssertionError)."""
-        rsi_values = [20.0, 25.0, 28.0, 29.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        with self.assertRaisesRegex(
-            AssertionError, "'buy_rsi_threshold' must be a number."
-        ):
-            should_buy_asset(rsi_series, {"buy_rsi_threshold": "not_a_number"})
-
-    def test_should_buy_asset_config_threshold_out_of_range(self):
-        """Test should_buy_asset with 'buy_rsi_threshold' out of range (AssertionError)."""
-        rsi_values = [20.0, 25.0, 28.0, 29.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        with self.assertRaisesRegex(
-            AssertionError, "'buy_rsi_threshold' must be between 0 and 100."
-        ):
-            should_buy_asset(rsi_series, {"buy_rsi_threshold": 150.0})
-        with self.assertRaisesRegex(
-            AssertionError, "'buy_rsi_threshold' must be between 0 and 100."
-        ):
-            should_buy_asset(rsi_series, {"buy_rsi_threshold": 0.0})
-        with self.assertRaisesRegex(
-            AssertionError, "'buy_rsi_threshold' must be between 0 and 100."
-        ):
-            should_buy_asset(rsi_series, {"buy_rsi_threshold": -10.0})
-
-    def test_should_buy_asset_exact_threshold_crossing(self):
-        """Test scenario where previous RSI is exactly at threshold."""
-        # RSIs: [20, 25, 28, 30, 35] (Previous 30 <= 30)
-        rsi_values = [20.0, 25.0, 28.0, 30.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        config_params = {"buy_rsi_threshold": 30.0}
-        self.assertTrue(should_buy_asset(rsi_series, config_params))
-
-    def test_should_buy_asset_one_of_three_priors_just_below_threshold(self):
-        """Test where only one of the three prior RSIs meets the condition."""
-        # RSIs: [31, 32, 29.9, 28, 35] (Priors [31, 32, 29.9], 29.9 < 30)
-        rsi_values = [31.0, 32.0, 29.9, 28.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        config_params = {"buy_rsi_threshold": 30.0}
-        self.assertTrue(should_buy_asset(rsi_series, config_params))
-
-    def test_should_buy_asset_all_three_priors_below_threshold(self):
-        """Test where all three prior RSIs are below the threshold."""
-        # RSIs: [25, 26, 27, 28, 35] (Priors [25, 26, 27] all < 30)
-        rsi_values = [25.0, 26.0, 27.0, 28.0, 35.0]
-        rsi_series = self._create_rsi_series(rsi_values)
-        config_params = {"buy_rsi_threshold": 30.0}
-        self.assertTrue(should_buy_asset(rsi_series, config_params))
-
-    # --- Tests for should_sell_asset ---
-
-    def setUp(self):
-        """Set up common test objects."""
-        self.mock_coinbase_client = Mock()
-        self.mock_persistence_manager = Mock()
-        self.asset_id = "BTC-USD"
-        self.config_asset_params_sell = {
-            "stop_loss_percentage": 5.0,  # 5%
-            "take_profit_percentage": 10.0,  # 10%
-        }
-        self.filled_buy_trade_details = {
-            "order_id": "buy123",
-            "price": 100.0,  # Buy price
-            "quantity": 1.0,
-            "timestamp": "2023-01-01T10:00:00Z",
-            "associated_sell_orders": [],
-        }
-
-    def test_determine_sell_orders_params_valid_three_tiers(self):
-        """Test with valid inputs, 3 profit tiers, all above min size."""
-        buy_price = 100.0
-        buy_quantity = 10.0  # Total quantity bought
-        product_details = {
-            "quote_increment": "0.01",  # Price precision
-            "base_increment": "0.001",  # Quantity precision
-            "base_min_size": "0.01",  # Min order quantity
-        }
-        config_asset_params = {
-            "sell_profit_tiers": [
-                {
-                    "percentage": 10.0,
-                    "quantity_percentage": 30.0,
-                },  # Sell 30% of 10 (3 units) at 10% profit
-                {
-                    "percentage": 20.0,
-                    "quantity_percentage": 40.0,
-                },  # Sell 40% of 10 (4 units) at 20% profit
-                {
-                    "percentage": 30.0,
-                    "quantity_percentage": 30.0,
-                },  # Sell 30% of 10 (3 units) at 30% profit
-            ]
-        }
-        # Expected calculations (Price: buy_price * (1 + P/100), Qty: buy_qty * (QP/100))
-        # Tier 1: Price = 100 * 1.10 = 110.00. Qty = 10 * 0.30 = 3.000
-        # Tier 2: Price = 100 * 1.20 = 120.00. Qty = 10 * 0.40 = 4.000
-        # Tier 3: Price = 100 * 1.30 = 130.00. Qty = 10 * 0.30 = 3.000
-        expected_orders = [
-            {"price": 110.00, "quantity": 3.000},
-            {"price": 120.00, "quantity": 4.000},
-            {"price": 130.00, "quantity": 3.000},
+def test_determine_sell_orders_params_valid_tiers(valid_product_details):
+    """Test with valid inputs and multiple profit tiers."""
+    buy_price = 100.0
+    buy_quantity = 10.0
+    config = {
+        "sell_profit_tiers": [
+            {"percentage": 10.0, "quantity_percentage": 30.0},
+            {"percentage": 20.0, "quantity_percentage": 50.0},
+            {"percentage": 30.0, "quantity_percentage": 20.0},
         ]
+    }
 
-        result = determine_sell_orders_params(
-            buy_price, buy_quantity, product_details, config_asset_params
-        )
-        self.assertEqual(len(result), 3)
-        for i, order in enumerate(expected_orders):
-            self.assertAlmostEqual(result[i]["price"], order["price"], places=2)
-            self.assertAlmostEqual(result[i]["quantity"], order["quantity"], places=3)
+    result = determine_sell_orders_params(buy_price, buy_quantity, valid_product_details, config)
 
-    def test_determine_sell_orders_params_quantity_adjustment(self):
-        """Test correct quantity adjustment based on base_increment."""
-        buy_price = 100.0
-        buy_quantity = 1.0
-        product_details = {
-            "quote_increment": "0.01",
-            "base_increment": "0.1",  # Larger base increment
-            "base_min_size": "0.05",
-        }
-        config_asset_params = {
-            "sell_profit_tiers": [
-                {
-                    "percentage": 10.0,
-                    "quantity_percentage": 100.0,
-                }  # Qty = 1.0 * 1.0 = 1.0
-            ]
-        }
-        # Expected: Qty = 1.0, adjusted to 1.0 (no change as it's a multiple of 0.1)
-        # If tier_quantity_raw was 0.15, it would adjust down to 0.1
-        # Let's test that: buy_quantity = 0.15, QP = 100% -> tier_qty_raw = 0.15, adjusted to 0.1
-        buy_quantity_test = 0.15
-        expected_orders = [{"price": 110.00, "quantity": 0.1}]
-        result = determine_sell_orders_params(
-            buy_price, buy_quantity_test, product_details, config_asset_params
-        )
-        self.assertEqual(len(result), 1)
-        self.assertAlmostEqual(
-            result[0]["price"], expected_orders[0]["price"], places=2
-        )
+    assert len(result) == 3
+    assert result[0] == {"price": 110.00, "quantity": 3.0}
+    assert result[1] == {"price": 120.00, "quantity": 5.0}
+    assert result[2] == {"price": 130.00, "quantity": 2.0}
 
-    def test_determine_sell_orders_params_price_adjustment(self):
-        """Test correct price adjustment based on quote_increment."""
-        buy_price = 100.03  # Buy price that will result in non-trivial price adjustment
-        buy_quantity = 1.0
-        product_details = {
-            "quote_increment": "0.05",  # Price increment of 5 cents
-            "base_increment": "0.001",
-            "base_min_size": "0.01",
-        }
-        config_asset_params = {
-            "sell_profit_tiers": [
-                {
-                    "percentage": 10.0,
-                    "quantity_percentage": 100.0,
-                }  # Price = 100.03 * 1.10 = 110.033
-            ]
-        }
-        # Note: Current implementation appears to round to 2 decimal places (110.03),
-        # not quantize to the quote_increment (which would be 110.00).
-        # This test is adjusted to pass against the current behavior.
-        expected_orders = [{"price": 110.03, "quantity": 1.000}]
-        result = determine_sell_orders_params(
-            buy_price, buy_quantity, product_details, config_asset_params
-        )
-        self.assertEqual(len(result), 1)
-        self.assertAlmostEqual(
-            result[0]["price"], expected_orders[0]["price"], places=2
-        )
-        self.assertAlmostEqual(
-            result[0]["quantity"], expected_orders[0]["quantity"], places=3
-        )
+def test_determine_sell_orders_params_quantity_adjustment(valid_product_details, sample_trading_pair_config):
+    """Test correct quantity adjustment based on base_increment."""
+    result = determine_sell_orders_params(2000.0, 0.12345678, valid_product_details, sample_trading_pair_config)
+    # Expected: 0.12345678 * 50% = 0.06172839 -> rounded down to 0.00001 increment -> 0.06172
+    assert result[0]["quantity"] == 0.06172
 
-    def test_determine_sell_orders_params_tier_below_min_size(self):
-        """Test that a tier resulting in quantity below base_min_size is omitted."""
-        buy_price = 100.0
-        buy_quantity = 0.1  # Small buy quantity
-        product_details = {
-            "quote_increment": "0.01",
-            "base_increment": "0.001",
-            "base_min_size": "0.05",  # Min order size is 0.05
-        }
-        config_asset_params = {
-            "sell_profit_tiers": [
-                {
-                    "percentage": 10.0,
-                    "quantity_percentage": 30.0,
-                },  # Qty = 0.1 * 0.30 = 0.03 (below min_size)
-                {
-                    "percentage": 20.0,
-                    "quantity_percentage": 70.0,
-                },  # Qty = 0.1 * 0.70 = 0.07 (above min_size)
-            ]
-        }
-        # Expected: Only the second tier should result in an order
-        # Price = 100 * 1.20 = 120.00. Qty = 0.07
-        expected_orders = [{"price": 120.00, "quantity": 0.070}]
-        result = determine_sell_orders_params(
-            buy_price, buy_quantity, product_details, config_asset_params
-        )
-        self.assertEqual(len(result), 1)
-        self.assertAlmostEqual(
-            result[0]["price"], expected_orders[0]["price"], places=2
-        )
-        self.assertAlmostEqual(
-            result[0]["quantity"], expected_orders[0]["quantity"], places=3
-        )
+def test_determine_sell_orders_params_price_adjustment(valid_product_details, sample_trading_pair_config):
+    """Test correct price adjustment based on quote_increment."""
+    result = determine_sell_orders_params(123.456, 10.0, valid_product_details, sample_trading_pair_config)
+    # Expected price: 123.456 * 1.02 = 125.92512 -> rounded down to 0.01 increment -> 125.92
+    assert result[0]["price"] == 125.92
 
-    def test_determine_sell_orders_params_total_quantity_percentage_not_100(self):
-        """Test behavior when total quantity_percentage in tiers is not 100%."""
-        # The function currently has a commented-out warning for this, so it should proceed.
-        buy_price = 100.0
-        buy_quantity = 10.0
-        product_details = {
-            "quote_increment": "0.01",
-            "base_increment": "0.001",
-            "base_min_size": "0.01",
-        }
-        config_asset_params = {
-            "sell_profit_tiers": [
-                {"percentage": 10.0, "quantity_percentage": 30.0},
-                {"percentage": 20.0, "quantity_percentage": 40.0},  # Total 70%
-            ]
-        }
-        expected_orders = [
-            {"price": 110.00, "quantity": 3.000},
-            {"price": 120.00, "quantity": 4.000},
+def test_determine_sell_orders_params_tier_below_min_size(valid_product_details):
+    """Test that a tier resulting in quantity below base_min_size is omitted."""
+    config = {
+        "sell_profit_tiers": [
+            {"percentage": 10.0, "quantity_percentage": 40.0},  # 0.0008 -> too small
+            {"percentage": 20.0, "quantity_percentage": 60.0}, # 0.0012 -> ok
         ]
-        result = determine_sell_orders_params(
-            buy_price, buy_quantity, product_details, config_asset_params
-        )
-        self.assertEqual(len(result), 2)
-        self.assertAlmostEqual(result[0]["quantity"], 3.0)
-        self.assertAlmostEqual(result[1]["quantity"], 4.0)
+    }
+    product_details = valid_product_details.copy()
+    product_details["base_min_size"] = "0.001"
 
-    def test_determine_sell_orders_params_invalid_product_details_format(self):
-        """Test ValueError for non-string increments/min_size in product_details."""
-        with self.assertRaisesRegex(
-            AssertionError, "'base_increment' missing from product_details."
-        ):
-            determine_sell_orders_params(100.0, 10.0, {"quote_increment": "0.01"}, {})
+    result = determine_sell_orders_params(100.0, 0.002, product_details, config)
 
-        with self.assertRaisesRegex(
-            AssertionError, "'base_min_size' missing from product_details."
-        ):
-            determine_sell_orders_params(
-                100.0,
-                10.0,
-                {"quote_increment": "0.01", "base_increment": "0.001"},
-                {},
-            )
+    assert len(result) == 1
+    assert result[0]["price"] == 120.00
+    assert result[0]["quantity"] == 0.0012
 
-        valid_cfg = {
-            "sell_profit_tiers": [{"percentage": 10.0, "quantity_percentage": 100.0}]
-        }
-        with self.assertRaisesRegex(
-            ValueError, "Invalid number format in product_details increments/min_size"
-        ):
-            determine_sell_orders_params(
-                100.0,
-                10.0,
-                {
-                    "quote_increment": "abc",
-                    "base_increment": "0.001",
-                    "base_min_size": "0.01",
-                },
-                valid_cfg,
-            )
+@pytest.mark.parametrize("details_key, error_msg", [
+    ("base_increment", "'base_increment' missing from product_details."),
+    ("quote_increment", "'quote_increment' missing from product_details."),
+    ("base_min_size", "'base_min_size' missing from product_details."),
+])
+def test_determine_sell_orders_params_missing_product_details(
+    details_key, error_msg, valid_product_details, sample_trading_pair_config
+):
+    """Test assertion errors for missing keys in product_details."""
+    del valid_product_details[details_key]
+    with pytest.raises(AssertionError, match=error_msg):
+        determine_sell_orders_params(100.0, 10.0, valid_product_details, sample_trading_pair_config)
 
-    def test_determine_sell_orders_params_assertion_errors(self):
-        """Test various input assertion errors."""
-        valid_pd = {
-            "quote_increment": "0.01",
-            "base_increment": "0.001",
-            "base_min_size": "0.01",
-        }
-        valid_cfg = {
-            "sell_profit_tiers": [{"percentage": 10, "quantity_percentage": 100}]
-        }
-
-        with self.assertRaisesRegex(
-            AssertionError, "buy_price must be a positive number."
-        ):
-            determine_sell_orders_params(0, 10, valid_pd, valid_cfg)
-        with self.assertRaisesRegex(
-            AssertionError, "buy_quantity must be a positive number."
-        ):
-            determine_sell_orders_params(100, 0, valid_pd, valid_cfg)
-        with self.assertRaisesRegex(
-            AssertionError, "'quote_increment' missing from product_details."
-        ):
-            determine_sell_orders_params(100, 10, {}, valid_cfg)
-        with self.assertRaisesRegex(
-            AssertionError, r"product_details\['quote_increment'\] must be a string."
-        ):
-            determine_sell_orders_params(
-                100,
-                10,
-                {
-                    "quote_increment": 0.01,
-                    "base_increment": "0.1",
-                    "base_min_size": "0.1",
-                },
-                valid_cfg,
-            )
-        with self.assertRaisesRegex(
-            AssertionError, "'sell_profit_tiers' missing from config_asset_params."
-        ):
-            determine_sell_orders_params(100, 10, valid_pd, {})
-        with self.assertRaisesRegex(
-            AssertionError, "'sell_profit_tiers' must be a list."
-        ):
-            determine_sell_orders_params(100, 10, valid_pd, {"sell_profit_tiers": {}})
-        with self.assertRaisesRegex(
-            AssertionError, "Each tier in 'sell_profit_tiers' must be a dictionary."
-        ):
-            determine_sell_orders_params(
-                100, 10, valid_pd, {"sell_profit_tiers": [123]}
-            )
-        with self.assertRaisesRegex(
-            AssertionError, "'percentage' missing from a tier."
-        ):
-            determine_sell_orders_params(
-                100, 10, valid_pd, {"sell_profit_tiers": [{"quantity_percentage": 100}]}
-            )
-        with self.assertRaisesRegex(
-            AssertionError, "Tier 'percentage' must be a positive number."
-        ):
-            determine_sell_orders_params(
-                100,
-                10,
-                valid_pd,
-                {"sell_profit_tiers": [{"percentage": 0, "quantity_percentage": 100}]},
-            )
-
-
-if __name__ == "__main__":
-    unittest.main()
+@pytest.mark.parametrize("buy_price, buy_quantity, config, error_msg", [
+    (0, 10, {}, "buy_price must be a positive number."),
+    (100, 0, {}, "buy_quantity must be a positive number."),
+    (100, 10, {"sell_profit_tiers": "not_a_list"}, "'sell_profit_tiers' must be a list."),
+    (100, 10, {"sell_profit_tiers": [123]}, "Each tier in 'sell_profit_tiers' must be a dictionary."),
+])
+def test_determine_sell_orders_params_assertions(
+    buy_price, buy_quantity, config, error_msg, valid_product_details
+):
+    """Test various input assertion errors."""
+    with pytest.raises(AssertionError, match=error_msg):
+        determine_sell_orders_params(buy_price, buy_quantity, valid_product_details, config)

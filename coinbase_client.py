@@ -205,12 +205,12 @@ class CoinbaseClient:
                 # Convert the list of Candle objects to a list of dictionaries
                 candles_as_dicts = [
                     {
-                        "start": c.start,
-                        "low": c.low,
-                        "high": c.high,
-                        "open": c.open,
-                        "close": c.close,
-                        "volume": c.volume,
+                        'start': c['start'],
+                        'low': c['low'],
+                        'high': c['high'],
+                        'open': c['open'],
+                        'close': c['close'],
+                        'volume': c['volume'],
                     }
                     for c in actual_candles
                 ]
@@ -219,8 +219,7 @@ class CoinbaseClient:
                 self.logger.info(
                     f"No candle data retrieved for {product_id} or response format was unexpected."
                 )
-
-            return actual_candles
+                return []
         except HTTPError as e:
             self.logger.error(
                 f"HTTP error retrieving candles for {product_id}: {e.response.status_code} {e.response.text}",
