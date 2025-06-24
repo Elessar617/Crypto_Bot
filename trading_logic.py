@@ -23,7 +23,7 @@ def should_buy_asset(
         rsi_series: A pandas Series representing the RSI values for the asset.
                     The series should be ordered from oldest to newest.
         config_asset_params: A dictionary containing configuration parameters for the asset,
-                             expected to include 'buy_rsi_threshold'.
+                             expected to include 'rsi_oversold_threshold'.
 
     Returns:
         True if the buying conditions are met, False otherwise.
@@ -47,10 +47,10 @@ def should_buy_asset(
         config_asset_params, dict
     ), "config_asset_params must be a dictionary."
     assert (
-        "buy_rsi_threshold" in config_asset_params
-    ), "'buy_rsi_threshold' missing from config_asset_params."
+        "rsi_oversold_threshold" in config_asset_params
+    ), "'rsi_oversold_threshold' missing from config_asset_params."
 
-    buy_rsi_threshold = config_asset_params["buy_rsi_threshold"]
+    buy_rsi_threshold = config_asset_params["rsi_oversold_threshold"]
     # Assertion 4: Validate buy_rsi_threshold type and value (optional, but good practice)
     assert isinstance(
         buy_rsi_threshold, (int, float)

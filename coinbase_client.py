@@ -146,7 +146,7 @@ class CoinbaseClient:
             assert self.client is not None, "RESTClient not initialized."
             actual_candles: Optional[List[Dict[str, Any]]] = None
             # Corrected method name
-            response_data = self.client.get_product_candles(
+            response_data = self.client.get_public_candles(
                 product_id=product_id,
                 granularity=granularity,
                 start=start,  # Pass along start/end if provided
@@ -181,9 +181,19 @@ class CoinbaseClient:
                 self.logger.info(
                     f"Successfully retrieved {len(actual_candles)} candles for {product_id}."
                 )
-                assert all(
-                    isinstance(c, dict) for c in actual_candles
-                ), "Not all items in actual_candles are dictionaries."
+                # Convert the list of Candle objects to a list of dictionaries
+                candles_as_dicts = [
+                    {
+                        "start": c.start,
+                        "low": c.low,
+                        "high": c.high,
+                        "open": c.open,
+                        "close": c.close,
+                        "volume": c.volume,
+                    }
+                    for c in actual_candles
+                ]
+                return candles_as_dicts
             else:
                 self.logger.info(
                     f"No candle data retrieved for {product_id} or response format was unexpected."
@@ -275,19 +285,63 @@ class CoinbaseClient:
                 isinstance(product_id, str) and product_id
             ), "Product ID must be a non-empty string."
 
-            response = self.client.get_product(product_id=product_id)
-            self.logger.debug(f"Raw product response: {response}")
+            # The SDK method is get_products (plural), which gets all products.
+            # We then need to find the specific product we're interested in.
+            response = self.client.get_products()
+            self.logger.debug("Raw get_products response received.")
 
-            if response and isinstance(response, dict):
-                self.logger.info(
-                    f"Successfully retrieved product details for {product_id}."
-                )
-                return response
+            products_list = []
+            if hasattr(response, "products") and isinstance(response.products, list):
+                products_list = response.products
+            elif isinstance(response, dict) and "products" in response:
+                products_list = response.get("products", [])
             else:
-                self.logger.warning(
-                    f"Received no data or unexpected format for product {product_id}."
-                )
-                return None
+                self.logger.warning(f"Unexpected format for get_products response: {type(response)}")
+
+            product_data = None
+            for product in products_list:
+                # The response contains a list of Product objects, not dicts.
+                # Access attributes directly using dot notation.
+                if hasattr(product, 'product_id') and product.product_id == product_id:
+                    # Convert the Product object to a dictionary that the rest of the system expects.
+                    product_data = {
+                        "product_id": product.product_id,
+                        "price": product.price,
+                        "price_percentage_change_24h": product.price_percentage_change_24h,
+                        "volume_24h": product.volume_24h,
+                        "volume_percentage_change_24h": product.volume_percentage_change_24h,
+                        "base_increment": product.base_increment,
+                        "quote_increment": product.quote_increment,
+                        "quote_min_size": product.quote_min_size,
+                        "quote_max_size": product.quote_max_size,
+                        "base_min_size": product.base_min_size,
+                        "base_max_size": product.base_max_size,
+                        "base_name": product.base_name,
+                        "quote_name": product.quote_name,
+                        "watched": product.watched,
+                        "is_disabled": product.is_disabled,
+                        "new": product.new,
+                        "status": product.status,
+                        "cancel_only": product.cancel_only,
+                        "limit_only": product.limit_only,
+                        "post_only": product.post_only,
+                        "trading_disabled": product.trading_disabled,
+                        "auction_mode": product.auction_mode,
+                        "product_type": product.product_type,
+                        "quote_currency_id": product.quote_currency_id,
+                        "base_currency_id": product.base_currency_id,
+                        "fcm_trading_session_details": product.fcm_trading_session_details,
+                        "mid_market_price": product.mid_market_price,
+                        # For compatibility with older parts of the logic that might expect these keys
+                        "min_market_funds": product.quote_min_size,
+                    }
+                    self.logger.info(f"Successfully found and formatted product details for {product_id}.")
+                    break
+            
+            if not product_data:
+                self.logger.warning(f"Could not find product details for {product_id} in API response.")
+
+            return product_data
 
         except Exception as e:
             self.logger.error(
