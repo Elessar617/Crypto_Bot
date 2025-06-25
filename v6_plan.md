@@ -124,19 +124,61 @@ This phase focused on improving the quality, maintainability, and organization o
     *   Ensure a consistent structure across all test files for better readability.
     *   Organize tests logically within classes or modules.
 
-## VI. Code Coverage Improvement (>90%)
+## VI. Advanced Testing Strategy
 
-This phase focuses on increasing the test coverage to over 90% for all critical modules, ensuring the bot's logic is robust and well-verified.
+This phase moves beyond simple line coverage to a more sophisticated, risk-based approach. The goal is not just to test more, but to test smarter, focusing effort where it provides the most value and confidence.
 
-*   [ ] **Overall Goal:** Achieve and maintain >90% code coverage.
-*   [ ] **Module: `coinbase_client.py` (Current: 54%)**
-    *   [ ] Add tests for `HTTPError` exception handling in all relevant methods.
-    *   [ ] Add tests for `RequestException` handling.
-    *   [ ] Add tests for unexpected `Exception` scenarios.
-    *   [ ] Add tests for different API response formats and edge cases (e.g., empty lists, missing keys).
-*   [ ] **Module: `trading_logic.py` (Current: 40%)**
-    *   [ ] Add tests to cover all logical branches in `should_buy_asset` and `should_sell_asset`.
-    *   [ ] Add tests for the helper functions that determine sell order parameters.
-    *   [ ] Write comprehensive tests for `process_asset_trade_cycle` to simulate various states (e.g., partially filled orders, API failures during the cycle).
-*   [ ] **Module: `logger.py` (Current: 70%)**
-    *   [ ] Add tests for file I/O error handling during logger setup.
+### 1. Strategic Code Coverage
+
+Instead of a uniform coverage target, we will apply a tiered approach based on module criticality.
+
+*   **Tier 1: Critical Modules (>95% Coverage + Mutation Testing)**
+    *   *Definition:* Modules where a bug could lead to direct financial loss, data corruption, or major malfunction.
+    *   *Modules:*
+        *   `coinbase_client.py`
+        *   `persistence.py`
+        *   `trading/` (all modules within)
+*   **Tier 2: High Importance (>85% Coverage)**
+    *   *Definition:* Modules supporting core functionality where bugs could lead to flawed analysis or poor decisions.
+    *   *Modules:*
+        *   `technical_analysis.py`
+        *   `main.py`
+*   **Tier 3: Utility & Supporting (<85% Coverage Acceptable)**
+    *   *Definition:* Modules that provide supporting functionality. The focus here is on testability and clarity over raw coverage percentage.
+    *   *Modules:*
+        *   `config.py`
+        *   `logger.py`
+
+### 2. Mutation Testing
+
+To measure the *quality* and *effectiveness* of our tests, not just their quantity, we will introduce mutation testing.
+
+*   **Goal:** Ensure that our test suite can detect small, intentionally introduced bugs (mutations). A "surviving" mutant indicates a weakness in our tests that must be fixed.
+*   **Tool:** We will use `mutmut` for Python.
+*   **Mutation Testing Progress:**
+    *   **Status:** Iteratively analyzing and killing surviving mutants in `coinbase_client.py`.
+    *   **Score:** 241/342 killed (70.5%) | 101 survived (29.5%)
+    *   **Task List:**
+        *   [x] Update test strategy in `v6_plan.md` to risk-based approach.
+        *   [x] Add `mutmut` to `requirements.txt` and install.
+        *   [x] Refactor `logger.py` for explicit, testable configuration.
+        *   [x] Redesign and fix `logger.py` tests for reliability.
+        *   [x] Run `mutmut` on `coinbase_client.py` and record baseline.
+        *   [x] **`get_product_candles`:** Added tests for direct list response, invalid input, and HTTPError handling.
+        *   [x] **`limit_order` methods:** Added tests for invalid, zero, and small price boundaries.
+        *   [x] **`limit_order` methods:** Fixed bug in nested error message logging and updated tests.
+        *   [x] **`get_product_book`:** Added comprehensive tests for input validation, malformed data, and exception handling. Fixed assertion propagation bug.
+        *   [x] **`get_accounts`:** Added comprehensive tests for all response formats, data integrity, and malformed data. Fixed assertion propagation bug.
+        *   [x] **`get_product`:** Added comprehensive tests for all response formats, data integrity, and exception handling. Fixed assertion propagation bug.
+        *   [ ] **Next Target: `cancel_orders`:** Analyze surviving mutants and write targeted tests.
+        *   [ ] Continue iterating until mutation score is satisfactory for Tier 1.
+
+### 3. Refactoring for Testability
+
+Low code coverage is often a symptom of code that is difficult to test. Instead of writing complex tests to force coverage, we will prioritize refactoring the code itself to be more testable.
+
+*   **Case Study: `logger.py`**
+    *   **Problem:** The logger module has proven difficult to test due to its reliance on module-level state and complex import-time logic. This has led to persistent, flaky test failures.
+    *   **Solution:**
+        *   [ ] Refactor `logger.py` to make its configuration explicit and repeatable, likely via a `setup_logging()` function.
+        *   [ ] This will simplify the tests, eliminate the need for complex `sys.modules` manipulation, and resolve the outstanding test failures as a direct result of improved design.

@@ -15,73 +15,58 @@ class LoggerDirectoryError(Exception):
     pass
 
 
-# Temporary variables to hold config values before Final declaration
-_log_level_str: str
-_log_file_str: str
-_persistence_dir_str: str
+def _load_config() -> tuple[str, str, str, int]:
+    """
+    Loads logger configuration, providing fallbacks on error.
 
+    This function encapsulates the logic for importing and validating configuration
+    from `config.py`. If any step fails (import, validation), it logs a
+    critical error and returns safe default values.
+
+    Returns:
+        A tuple containing:
+        - Log level as a string (e.g., "DEBUG").
+        - Log file name as a string.
+        - Persistence directory path as a string.
+        - Numeric log level (e.g., logging.DEBUG).
+    """
+    try:
+        # Dynamically import to keep this function self-contained.
+        from config import (
+            LOG_LEVEL as CFG_LOG_LEVEL,
+            LOG_FILE as CFG_LOG_FILE,
+            PERSISTENCE_DIR as CFG_PERSISTENCE_DIR,
+        )
+
+        # Rule: Use a minimum of two runtime assertions per logical block.
+        assert isinstance(CFG_LOG_LEVEL, str), "LOG_LEVEL must be a string."
+        level_str = CFG_LOG_LEVEL.upper()
+        numeric_level = getattr(logging, level_str, -1)
+        assert numeric_level != -1, f"Invalid LOG_LEVEL '{level_str}' specified."
+
+        assert isinstance(CFG_LOG_FILE, str), "LOG_FILE must be a string."
+        assert len(CFG_LOG_FILE) > 0, "LOG_FILE cannot be empty."
+
+        assert isinstance(
+            CFG_PERSISTENCE_DIR, str
+        ), "PERSISTENCE_DIR must be a string."
+        assert len(CFG_PERSISTENCE_DIR) > 0, "PERSISTENCE_DIR cannot be empty."
+
+        # Log success only if everything is valid.
+        logging.getLogger(__name__).info("Successfully loaded logger configuration.")
+        return level_str, CFG_LOG_FILE, CFG_PERSISTENCE_DIR, numeric_level
+
+    except (ImportError, AssertionError) as e:
+        # Log the specific error and return fallback values.
+        logging.getLogger(__name__).critical(
+            f"Logger config error: {e}. Using ERROR level fallback."
+        )
+        return "ERROR", "critical_error_logger_fallback.log", ".", logging.ERROR
+
+
+# Load configuration at module level using the helper function.
 # Rule: Restrict the scope of data to the smallest possible.
-# Attempt to import configuration settings
-try:
-    # Ensure that config is imported and used locally to avoid polluting namespace if not needed
-    from config import (
-        LOG_LEVEL as CFG_LOG_LEVEL,
-        LOG_FILE as CFG_LOG_FILE,
-        PERSISTENCE_DIR as CFG_PERSISTENCE_DIR,
-    )
-
-    # Validate and cast imported config values
-    # Rule: Check the return value of all non-void functions.
-    # Rule: Use a minimum of two runtime assertions per function (or logical block).
-    assert isinstance(CFG_LOG_LEVEL, str), "LOG_LEVEL from config must be a string."
-    _log_level_str = CFG_LOG_LEVEL.upper()
-    assert _log_level_str in [
-        "DEBUG",
-        "INFO",
-        "WARNING",
-        "ERROR",
-        "CRITICAL",
-    ], f"Invalid LOG_LEVEL '{_log_level_str}' from config."
-
-    assert isinstance(CFG_LOG_FILE, str), "LOG_FILE from config must be a string."
-    _log_file_str = CFG_LOG_FILE
-    assert len(_log_file_str) > 0, "LOG_FILE from config cannot be empty."
-
-    assert isinstance(
-        CFG_PERSISTENCE_DIR, str
-    ), "PERSISTENCE_DIR from config must be a string."
-    _persistence_dir_str = CFG_PERSISTENCE_DIR
-    assert len(_persistence_dir_str) > 0, "PERSISTENCE_DIR from config cannot be empty."
-
-    # Log successful import and usage of config values
-    # This initial logging will go to stderr if logger isn't fully set up yet.
-    logging.getLogger(__name__).info(
-        "Successfully imported and validated logger configuration from config.py."
-    )
-
-except ImportError as e:
-    # Log that config import failed and we are using defaults
-    logging.getLogger(__name__).critical(
-        f"Failed to import config: {e}. Using basic stderr logging and default paths."
-    )
-    # Use default fallback values
-    _log_level_str = "ERROR"
-    _log_file_str = "critical_error_logger_fallback.log"
-    _persistence_dir_str = "."
-
-except AssertionError as e:
-    logging.getLogger(__name__).critical(
-        f"Configuration validation error: {e}. Using basic stderr logging and default paths."
-    )
-    # Use default fallback values on assertion error as well
-    _log_level_str = "ERROR"
-    _log_file_str = "critical_error_logger_fallback.log"
-    _persistence_dir_str = "."
-
-# Now, define the Final constants for the logger module
-LOG_LEVEL: Final[str] = _log_level_str
-LOG_FILE: Final[str] = _log_file_str
-PERSISTENCE_DIR: Final[str] = _persistence_dir_str
+(LOG_LEVEL, LOG_FILE, PERSISTENCE_DIR, _log_level_numeric) = _load_config()
 
 # Define the root logger name for the application
 APP_LOGGER_NAME: Final[str] = "CryptoBotV6"
@@ -124,68 +109,66 @@ except (OSError, LoggerDirectoryError) as e:
 else:
     _file_logging_enabled = True
 
-# Configure the logger instance
-_logger = logging.getLogger(APP_LOGGER_NAME)
+def setup_logger(
+    level: int, file_path: str, file_logging_enabled: bool
+) -> tuple[logging.Logger, bool]:
+    """
+    Configures and returns the application logger.
 
-# Clear any existing handlers from a previous load/configuration.
-# This is crucial for testing scenarios involving module reloads to ensure a clean state.
-# Iterate over a copy of the handlers list for safe removal.
-if _logger.hasHandlers():
-    for handler in list(_logger.handlers):
-        _logger.removeHandler(handler)
-        handler.close()  # Important to close handlers to release resources
+    This function is responsible for setting up the logger's handlers, formatter,
+    and level. It is designed to be called once at module startup and can be
+    re-called during testing to reconfigure the logger in a controlled way.
 
-# Reset propagation to default (False, as set later) in case it was modified by a previous configuration.
-_logger.propagate = False
+    Args:
+        level (int): The numeric logging level (e.g., logging.DEBUG).
+        file_path (str): The full path to the log file.
+        file_logging_enabled (bool): Whether to enable file logging.
 
-# Set the logging level from config (ensure it's a valid level)
-# Rule: All loops must have fixed bounds (not applicable here).
-# Rule: Avoid complex flow constructs (simple if/else for level setting).
-log_level_numeric = getattr(logging, LOG_LEVEL.upper(), logging.INFO)
-assert isinstance(
-    log_level_numeric, int
-), f"Invalid LOG_LEVEL '{LOG_LEVEL}' from config. Defaulting to INFO."
-if not isinstance(log_level_numeric, int):
-    print(
-        f"WARNING: Invalid LOG_LEVEL '{LOG_LEVEL}' from config. Defaulting to INFO.",
-        file=sys.stderr,
+    Returns:
+        tuple[logging.Logger, bool]: A tuple containing the configured logger
+                                     and a boolean indicating if file logging
+                                     was successfully enabled.
+    """
+    logger = logging.getLogger(APP_LOGGER_NAME)
+
+    # Clear any existing handlers to ensure a clean configuration.
+    if logger.hasHandlers():
+        for handler in list(logger.handlers):
+            logger.removeHandler(handler)
+            handler.close()
+
+    logger.setLevel(level)
+    logger.propagate = False
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
-    log_level_numeric = logging.INFO  # Fallback to INFO if invalid
 
-_logger.setLevel(log_level_numeric)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
-# Create a standard formatter
-# Rule: Use the preprocessor only for header files and simple macros (not applicable to Python logging format strings).
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(levelname)s - %(module)s.%(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
+    if file_logging_enabled:
+        try:
+            file_handler = logging.FileHandler(file_path, mode="a")
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+            return logger, True  # Return logger and True for success
+        except IOError as e:
+            logger.error(
+                f"Could not create or open log file {file_path}: {e}. File logging disabled."
+            )
+            return logger, False  # Return logger and False for failure
+
+    # If file logging was not enabled in the first place
+    return logger, False
+
+
+# Initial setup on module import
+_logger, _file_logging_enabled = setup_logger(
+    _log_level_numeric, LOG_FILE_PATH, _file_logging_enabled
 )
-
-# Create and configure console handler
-console_handler = logging.StreamHandler(sys.stdout)  # Log to stdout
-console_handler.setFormatter(formatter)
-_logger.addHandler(console_handler)
-
-# Create and configure file handler if directory creation was successful
-if _file_logging_enabled:
-    try:
-        file_handler = logging.FileHandler(LOG_FILE_PATH, mode="a")  # Append mode
-        file_handler.setFormatter(formatter)
-        _logger.addHandler(file_handler)
-        # Two assertions for file handler setup
-        assert any(
-            isinstance(h, logging.FileHandler) for h in _logger.handlers
-        ), "FileHandler not added to logger."
-        # Check if file was created or is writable (this is a bit harder to assert directly post-handler-add without logging something)
-        # For now, the try/except for FileHandler creation is the primary check.
-    except IOError as e:
-        _logger.error(
-            f"Could not create or open log file {LOG_FILE_PATH}: {e}. File logging will be disabled."
-        )
-        # No need to remove console_handler, it's already added and useful.
-
-# Prevent log propagation to avoid duplicate messages if root logger is also configured by another library
-_logger.propagate = False
 
 
 # Function to provide the logger instance

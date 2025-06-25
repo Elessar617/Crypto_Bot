@@ -3,7 +3,7 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock, Mock, call, PropertyMock
 import uuid
 from requests.exceptions import HTTPError, RequestException
 
@@ -62,6 +62,13 @@ class TestCoinbaseClient(unittest.TestCase):
         self.mock_rest_client_instance = self.mock_rest_client_class.return_value
         self.mock_logger_instance = self.mock_logger_module.get_logger.return_value
 
+        # Create a reusable mock HTTPError
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.text = "Test Error"
+        self.mock_http_error = HTTPError("Test Error")
+        self.mock_http_error.response = mock_response
+
         self.mock_config_module.COINBASE_API_KEY = "test_api_key"
         self.mock_config_module.COINBASE_API_SECRET = "test_api_secret"
 
@@ -90,9 +97,9 @@ class TestCoinbaseClient(unittest.TestCase):
 
     # --- Test Core Methods ---
 
-    def test_get_accounts_success(self):
-        """Test get_accounts successfully returns a list of accounts."""
-        expected_accounts = [{"id": "acc1"}]
+    def test_get_accounts_success_with_dict_key(self):
+        """Test get_accounts success when response is a dict with an 'accounts' key."""
+        expected_accounts = [{"id": "123", "currency": "BTC"}]
         self.mock_rest_client_instance.get_accounts.return_value = {"accounts": expected_accounts}
         client = self.CoinbaseClient()
         accounts = client.get_accounts()
@@ -100,6 +107,42 @@ class TestCoinbaseClient(unittest.TestCase):
         self.mock_rest_client_instance.get_accounts.assert_called_once()
         self.mock_logger_instance.info.assert_called_with(
             f"Successfully retrieved {len(expected_accounts)} accounts."
+        )
+
+    def test_get_accounts_success_with_accounts_attribute(self):
+        """Test get_accounts success when response is an object with an .accounts attribute."""
+        expected_accounts = [{"id": "456", "currency": "ETH"}]
+        response_obj = type("AccountsResponse", (), {"accounts": expected_accounts})()
+        self.mock_rest_client_instance.get_accounts.return_value = response_obj
+        client = self.CoinbaseClient()
+        accounts = client.get_accounts()
+        self.assertEqual(accounts, expected_accounts)
+
+    def test_get_accounts_success_direct_list_response(self):
+        """Test get_accounts success when response is a direct list."""
+        expected_accounts = [{"id": "789", "currency": "USDC"}]
+        self.mock_rest_client_instance.get_accounts.return_value = expected_accounts
+        client = self.CoinbaseClient()
+        accounts = client.get_accounts()
+        self.assertEqual(accounts, expected_accounts)
+
+    def test_get_accounts_malformed_data_in_list(self):
+        """Test get_accounts with a list containing non-dict items."""
+        malformed_accounts = [{"id": "1"}, "not_a_dict"]
+        self.mock_rest_client_instance.get_accounts.return_value = malformed_accounts
+        client = self.CoinbaseClient()
+        # This should fail until the exception handling is fixed
+        with self.assertRaisesRegex(AssertionError, "Not all items in accounts list are dictionaries."):
+            client.get_accounts()
+
+    def test_get_accounts_unexpected_format(self):
+        """Test get_accounts with an unexpected response format."""
+        self.mock_rest_client_instance.get_accounts.return_value = "just a string"
+        client = self.CoinbaseClient()
+        accounts = client.get_accounts()
+        self.assertIsNone(accounts)
+        self.mock_logger_instance.warning.assert_called_once_with(
+            f"Received unexpected format for accounts data: {type('str')}"
         )
 
     def test_get_accounts_api_exception(self):
@@ -157,13 +200,36 @@ class TestCoinbaseClient(unittest.TestCase):
         ]
         self.mock_rest_client_instance.get_public_candles.return_value = {"candles": expected_candles}
         client = self.CoinbaseClient()
-        candles = client.get_product_candles("BTC-USD", "ONE_HOUR")
+        start_time = "1672531200"
+        end_time = "1672534800"
+        candles = client.get_product_candles("BTC-USD", "ONE_HOUR", start=start_time, end=end_time)
         self.assertEqual(candles, expected_candles)
         self.mock_rest_client_instance.get_public_candles.assert_called_once_with(
             product_id="BTC-USD",
-            start="0",
-            end="0",
             granularity="ONE_HOUR",
+            start=start_time,
+            end=end_time,
+        )
+        self.mock_logger_instance.info.assert_called_with(
+            f"Successfully retrieved {len(expected_candles)} candles for BTC-USD."
+        )
+
+    def test_get_product_candles_success_object_response(self):
+        """Test get_product_candles successfully retrieves candles from an object response."""
+        expected_candles = [{"start": "456", "high": "200"}]
+
+        # Create a mock object with a 'candles' attribute to test the 'elif' branch
+        mock_response = MagicMock()
+        mock_response.candles = expected_candles
+
+        self.mock_rest_client_instance.get_public_candles.return_value = mock_response
+
+        client = self.CoinbaseClient()
+        candles = client.get_product_candles("BTC-USD", "15_MINUTE")
+
+        self.assertEqual(candles, expected_candles)
+        self.mock_rest_client_instance.get_public_candles.assert_called_once_with(
+            product_id="BTC-USD", start="0", end="0", granularity="15_MINUTE"
         )
         self.mock_logger_instance.info.assert_called_with(
             f"Successfully retrieved {len(expected_candles)} candles for BTC-USD."
@@ -176,19 +242,146 @@ class TestCoinbaseClient(unittest.TestCase):
         candles = client.get_product_candles("BTC-USD", "ONE_HOUR")
         self.assertIsNone(candles)
         self.mock_logger_instance.error.assert_called_with(
-            'An unexpected error occurred while retrieving candles for BTC-USD: API Error',
+            "An unexpected error occurred while retrieving candles for BTC-USD: API Error",
+            exc_info=True,
+        )
+
+    def test_get_product_candles_success_direct_list(self):
+        """Test get_product_candles when the API returns a list directly."""
+        expected_candles = [
+            {
+                "start": "1632828000",
+                "low": "41000",
+                "high": "42000",
+                "open": "41500",
+                "close": "41800",
+                "volume": "100",
+            }
+        ]
+        self.mock_rest_client_instance.get_public_candles.return_value = expected_candles
+        client = self.CoinbaseClient()
+        candles = client.get_product_candles(
+            product_id="ETH-USD", granularity="ONE_DAY"
+        )
+        self.assertEqual(candles, expected_candles)
+        self.mock_logger_instance.info.assert_called_with(
+            f"Successfully retrieved {len(expected_candles)} candles for ETH-USD."
+        )
+
+    def test_get_product_candles_invalid_input(self):
+        """Test get_product_candles with invalid input for product_id and granularity."""
+        client = self.CoinbaseClient()
+        with self.assertRaisesRegex(AssertionError, "product_id must be a non-empty string"):
+            client.get_product_candles("", "ONE_DAY")
+        with self.assertRaisesRegex(AssertionError, "granularity must be a non-empty string"):
+            client.get_product_candles("BTC-USD", "")
+
+    def test_get_product_candles_http_error(self):
+        """Test get_product_candles handles HTTPError."""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+        http_error = HTTPError("Internal Server Error")
+        http_error.response = mock_response
+
+        self.mock_rest_client_instance.get_public_candles.side_effect = http_error
+        client = self.CoinbaseClient()
+        candles = client.get_product_candles("BTC-USD", "ONE_HOUR")
+        self.assertIsNone(candles)
+        self.mock_logger_instance.error.assert_called_with(
+            "HTTP error retrieving candles for BTC-USD: 500 Internal Server Error",
             exc_info=True,
         )
 
     def test_get_product_book_success(self):
-        """Test successful retrieval of the product book."""
+        """Test successful retrieval of the product book via pricebook attribute."""
         expected_book = {'bids': [], 'asks': []}
-        self.mock_rest_client_instance.get_product_book.return_value = {'pricebook': expected_book}
+        # Simulate the response object having a 'pricebook' attribute
+        response_obj = type("PricebookResponse", (), {"pricebook": expected_book})()
+        self.mock_rest_client_instance.get_product_book.return_value = response_obj
         client = self.CoinbaseClient()
         book = client.get_product_book('BTC-USD')
         self.assertEqual(book, expected_book)
         self.mock_rest_client_instance.get_product_book.assert_called_once_with(product_id='BTC-USD', limit=None)
         self.mock_logger_instance.info.assert_called_with('Successfully retrieved product book for BTC-USD.')
+
+    def test_get_product_book_success_with_pricebook_key(self):
+        """Test successful retrieval when response is a dict with a 'pricebook' key."""
+        expected_book = {'bids': ["1"], 'asks': ["2"]}
+        self.mock_rest_client_instance.get_product_book.return_value = {'pricebook': expected_book}
+        client = self.CoinbaseClient()
+        book = client.get_product_book('BTC-USD')
+        self.assertEqual(book, expected_book)
+
+    def test_get_product_book_success_direct_dict_response(self):
+        """Test successful retrieval when API returns the book as a direct dictionary."""
+        expected_book = {"bids": [["100", "10", 1]], "asks": [["101", "5", 1]]}
+        self.mock_rest_client_instance.get_product_book.return_value = expected_book
+        client = self.CoinbaseClient()
+        book = client.get_product_book("BTC-USD")
+        self.assertEqual(book, expected_book)
+        self.mock_logger_instance.info.assert_called_with(
+            "Successfully retrieved product book for BTC-USD."
+        )
+
+    def test_get_product_book_invalid_product_id(self):
+        """Test get_product_book with an invalid product_id."""
+        client = self.CoinbaseClient()
+        with self.assertRaisesRegex(AssertionError, "product_id must be a non-empty string."):
+            client.get_product_book("")
+        with self.assertRaisesRegex(AssertionError, "product_id must be a non-empty string."):
+            client.get_product_book(None)
+
+    def test_get_product_book_invalid_limit(self):
+        """Test get_product_book with an invalid limit."""
+        client = self.CoinbaseClient()
+        with self.assertRaisesRegex(AssertionError, "limit must be a positive integer."):
+            client.get_product_book("BTC-USD", limit=0)
+        with self.assertRaisesRegex(AssertionError, "limit must be a positive integer."):
+            client.get_product_book("BTC-USD", limit=-1)
+        with self.assertRaisesRegex(AssertionError, "limit must be a positive integer."):
+            client.get_product_book("BTC-USD", limit="abc")
+
+    def test_get_product_book_unrecognized_format(self):
+        """Test a response format that is not recognized."""
+        malformed_response = {"data": "unexpected"}
+        self.mock_rest_client_instance.get_product_book.return_value = malformed_response
+        client = self.CoinbaseClient()
+        book = client.get_product_book("BTC-USD")
+        self.assertIsNone(book)
+        self.mock_logger_instance.warning.assert_called_once_with(
+            f"get_product_book for BTC-USD response format not recognized or key data missing: {malformed_response}"
+        )
+
+    def test_get_product_book_malformed_missing_bids(self):
+        """Test a book_data dictionary missing the 'bids' key."""
+        malformed_book = {"asks": []}  # Missing 'bids'
+        self.mock_rest_client_instance.get_product_book.return_value = {"pricebook": malformed_book}
+        client = self.CoinbaseClient()
+        with self.assertRaisesRegex(AssertionError, "Book data is missing 'bids' or 'asks'."):
+            client.get_product_book("BTC-USD")
+
+    def test_get_product_book_http_error(self):
+        """Test HTTPError during get_product_book call."""
+        self.mock_rest_client_instance.get_product_book.side_effect = self.mock_http_error
+        client = self.CoinbaseClient()
+        book = client.get_product_book("BTC-USD")
+        self.assertIsNone(book)
+        self.mock_logger_instance.error.assert_called_once_with(
+            f"HTTP error retrieving order book for BTC-USD: 404 Test Error",
+            exc_info=True,
+        )
+
+    def test_get_product_book_generic_exception(self):
+        """Test a generic exception during get_product_book call."""
+        self.mock_rest_client_instance.get_product_book.side_effect = Exception("Generic Error")
+        client = self.CoinbaseClient()
+        book = client.get_product_book("BTC-USD")
+        self.assertIsNone(book)
+        self.mock_logger_instance.error.assert_called_once_with(
+            "An unexpected error occurred while retrieving order book for BTC-USD: Generic Error",
+            exc_info=True
+        )
 
     def test_get_product_book_no_pricebook_key(self):
         """Test get_product_book handles a response missing the 'pricebook' key."""
@@ -229,8 +422,8 @@ class TestCoinbaseClient(unittest.TestCase):
         )
 
     # Tests for get_product
-    def test_get_product_success(self):
-        """Test successful retrieval of a single product."""
+    def test_get_product_success_dict_response(self):
+        """Test successful retrieval and full data mapping for a single product."""
         # Create a mock product object that mimics the structure of the SDK's Product object
         mock_product = MagicMock()
         mock_product.product_id = 'BTC-USD'
@@ -266,46 +459,96 @@ class TestCoinbaseClient(unittest.TestCase):
         product = client.get_product('BTC-USD')
 
         self.assertIsNotNone(product)
-        self.assertEqual(product['product_id'], 'BTC-USD')
-        self.assertEqual(product['price'], '50000.00')
+        # Assert every single field to kill mutants in the conversion block
+        self.assertEqual(product['product_id'], mock_product.product_id)
+        self.assertEqual(product['price'], mock_product.price)
+        self.assertEqual(product['price_percentage_change_24h'], mock_product.price_percentage_change_24h)
+        self.assertEqual(product['volume_24h'], mock_product.volume_24h)
+        self.assertEqual(product['volume_percentage_change_24h'], mock_product.volume_percentage_change_24h)
+        self.assertEqual(product['base_increment'], mock_product.base_increment)
+        self.assertEqual(product['quote_increment'], mock_product.quote_increment)
+        self.assertEqual(product['quote_min_size'], mock_product.quote_min_size)
+        self.assertEqual(product['quote_max_size'], mock_product.quote_max_size)
+        self.assertEqual(product['base_min_size'], mock_product.base_min_size)
+        self.assertEqual(product['base_max_size'], mock_product.base_max_size)
+        self.assertEqual(product['base_name'], mock_product.base_name)
+        self.assertEqual(product['quote_name'], mock_product.quote_name)
+        self.assertEqual(product['watched'], mock_product.watched)
+        self.assertEqual(product['is_disabled'], mock_product.is_disabled)
+        self.assertEqual(product['new'], mock_product.new)
+        self.assertEqual(product['status'], mock_product.status)
+        self.assertEqual(product['cancel_only'], mock_product.cancel_only)
+        self.assertEqual(product['limit_only'], mock_product.limit_only)
+        self.assertEqual(product['post_only'], mock_product.post_only)
+        self.assertEqual(product['trading_disabled'], mock_product.trading_disabled)
+        self.assertEqual(product['auction_mode'], mock_product.auction_mode)
+        self.assertEqual(product['product_type'], mock_product.product_type)
+        self.assertEqual(product['quote_currency_id'], mock_product.quote_currency_id)
+        self.assertEqual(product['base_currency_id'], mock_product.base_currency_id)
+        self.assertEqual(product['fcm_trading_session_details'], mock_product.fcm_trading_session_details)
+        self.assertEqual(product['mid_market_price'], mock_product.mid_market_price)
+        self.assertEqual(product['min_market_funds'], mock_product.quote_min_size) # Check compatibility key
         self.mock_logger_instance.info.assert_called_with('Successfully found and formatted product details for BTC-USD.')
+
+    def test_get_product_success_object_response(self):
+        """Test successful retrieval when response is an object with a .products attribute."""
+        mock_product = MagicMock()
+        mock_product.product_id = 'BTC-USD'
+        response_obj = type("ProductsResponse", (), {"products": [mock_product]})()
+        self.mock_rest_client_instance.get_products.return_value = response_obj
+        client = self.CoinbaseClient()
+        product = client.get_product('BTC-USD')
+        self.assertIsNotNone(product)
+        self.assertEqual(product['product_id'], 'BTC-USD')
 
     def test_get_product_not_found(self):
         """Test get_product when the product is not in the response."""
-        self.mock_rest_client_instance.get_products.return_value = {'products': []}
+        mock_product_eth = MagicMock()
+        mock_product_eth.product_id = 'ETH-USD'
+        self.mock_rest_client_instance.get_products.return_value = {'products': [mock_product_eth]}
+        client = self.CoinbaseClient()
+        product = client.get_product('BTC-USD') # Look for a different product
+        self.assertIsNone(product)
+        self.mock_logger_instance.warning.assert_called_with('Could not find product details for BTC-USD in API response.')
+
+    def test_get_product_malformed_product_in_list(self):
+        """Test get_product when a product in the list is missing 'product_id'."""
+        mock_good_product = MagicMock()
+        mock_good_product.product_id = 'ETH-USD'
+        mock_bad_product = MagicMock()
+        del mock_bad_product.product_id # This object does not have the attribute
+        self.mock_rest_client_instance.get_products.return_value = {'products': [mock_bad_product, mock_good_product]}
         client = self.CoinbaseClient()
         product = client.get_product('ETH-USD')
-        self.assertIsNone(product)
-        self.mock_logger_instance.warning.assert_called_with('Could not find product details for ETH-USD in API response.')
+        self.assertIsNotNone(product) # Should skip the bad one and find the good one
+        self.assertEqual(product['product_id'], 'ETH-USD')
 
-    def test_get_product_malformed_response(self):
-        """Test get_product with a malformed API response."""
-        self.mock_rest_client_instance.get_products.return_value = {'data': 'wrong format'}
+    def test_get_product_malformed_response_no_products_key(self):
+        """Test get_product with a response missing the 'products' key."""
+        self.mock_rest_client_instance.get_products.return_value = {'data': 'no products key'}
         client = self.CoinbaseClient()
         product = client.get_product('BTC-USD')
         self.assertIsNone(product)
-        # The method should log two warnings: one for the format, one for not finding the product.
-        # We will check that both were called.
-        calls = [
-            call("Unexpected format for get_products response: <class 'dict'>"),
-            call('Could not find product details for BTC-USD in API response.')
-        ]
-        self.mock_logger_instance.warning.assert_has_calls(calls, any_order=True)
+        self.mock_logger_instance.warning.assert_any_call("Unexpected format for get_products response: <class 'dict'>")
+        self.mock_logger_instance.warning.assert_any_call('Could not find product details for BTC-USD in API response.')
+
+    def test_get_product_malformed_response_products_not_list(self):
+        """Test get_product when 'products' in the response is not a list."""
+        self.mock_rest_client_instance.get_products.return_value = {'products': 'not a list'}
+        client = self.CoinbaseClient()
+        product = client.get_product('BTC-USD')
+        self.assertIsNone(product)
+        self.mock_logger_instance.warning.assert_any_call("Unexpected type for 'products' in API response: <class 'str'>")
+        self.mock_logger_instance.warning.assert_any_call('Could not find product details for BTC-USD in API response.')
 
     def test_get_product_http_error(self):
         """Test get_product handles HTTPError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_response.text = "Not Found"
-        http_error = HTTPError("Not Found")
-        http_error.response = mock_response
-
-        self.mock_rest_client_instance.get_products.side_effect = http_error
+        self.mock_rest_client_instance.get_products.side_effect = self.mock_http_error
         client = self.CoinbaseClient()
         product = client.get_product('BTC-USD')
         self.assertIsNone(product)
         self.mock_logger_instance.error.assert_called_with(
-            'HTTP error retrieving product BTC-USD: 404 Not Found',
+            'HTTP error retrieving product BTC-USD: 404 Test Error',
             exc_info=True
         )
 
@@ -319,6 +562,29 @@ class TestCoinbaseClient(unittest.TestCase):
             'Request exception retrieving product BTC-USD: Connection Error',
             exc_info=True
         )
+
+    def test_get_product_assertion_error_not_swallowed(self):
+        """Test that an AssertionError from input validation is not swallowed."""
+        client = self.CoinbaseClient()
+        # This will fail until the exception handling is fixed
+        with self.assertRaisesRegex(AssertionError, "Product ID must be a non-empty string."):
+            client.get_product(product_id=None)
+
+    def test_get_product_attribute_error_in_loop(self):
+        """Test get_product handles an AttributeError while processing the products list."""
+        # Use a stricter Mock with a spec. Accessing any attribute not in the spec
+        # (like 'price') will raise an AttributeError.
+        mock_bad_product = Mock(spec=['product_id'])
+        mock_bad_product.product_id = 'BTC-USD'
+
+        self.mock_rest_client_instance.get_products.return_value = {'products': [mock_bad_product]}
+        client = self.CoinbaseClient()
+        product = client.get_product('BTC-USD')
+
+        self.assertIsNone(product)
+        self.mock_logger_instance.error.assert_called_once()
+        logged_error_message = self.mock_logger_instance.error.call_args[0][0]
+        self.assertIn("An unexpected error occurred while retrieving product BTC-USD", logged_error_message)
 
     def test_get_product_unexpected_exception(self):
         """Test get_product handles a generic Exception."""
@@ -355,6 +621,28 @@ class TestCoinbaseClient(unittest.TestCase):
         )
         self.mock_logger_instance.info.assert_called_with('Limit buy order placed successfully for BTC-USD. Order ID: test_order_id_123')
 
+    def test_limit_order_buy_success_small_price(self):
+        """Test successful placement of a limit buy order with a small price."""
+        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = {
+            'success': True,
+            'order_id': 'test_order_id_small_price'
+        }
+        client = self.CoinbaseClient()
+        with patch.object(client, '_generate_client_order_id', return_value='test_client_order_id_small_price'):
+            result = client.limit_order_buy(product_id='DOGE-USD', size='10', price='1')
+
+        self.assertIsNotNone(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(result['order_id'], 'test_order_id_small_price')
+        self.mock_rest_client_instance.limit_order_gtc_buy.assert_called_once_with(
+            client_order_id='test_client_order_id_small_price',
+            product_id='DOGE-USD',
+            base_size='10',
+            limit_price='1',
+            post_only=True
+        )
+        self.mock_logger_instance.info.assert_called_with('Limit buy order placed successfully for DOGE-USD. Order ID: test_order_id_small_price')
+
     def test_limit_order_buy_api_failure(self):
         """Test API failure during limit buy order placement."""
         self.mock_rest_client_instance.limit_order_gtc_buy.return_value = {
@@ -366,13 +654,45 @@ class TestCoinbaseClient(unittest.TestCase):
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with('Limit buy order failed for BTC-USD. Reason: INSUFFICIENT_FUNDS')
 
-    def test_limit_order_buy_invalid_price(self):
-        """Test limit_order_buy with an invalid price (e.g., non-positive)."""
+    def test_limit_order_buy_invalid_price_non_positive(self):
+        """Test limit_order_buy with a non-positive price."""
         client = self.CoinbaseClient()
-        with self.assertRaises(ValueError) as cm:
+        # Test with a negative price
+        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
             client.limit_order_buy(product_id='BTC-USD', size='0.1', price='-100')
-        self.assertEqual(str(cm.exception), 'price must be a string representing a positive number.')
         self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_buy: -100.')
+
+        # Test with a zero price
+        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
+            client.limit_order_buy(product_id='BTC-USD', size='0.1', price='0')
+        self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_buy: 0.')
+
+    def test_limit_order_buy_invalid_price_non_numeric(self):
+        """Test limit_order_buy with a non-numeric price string."""
+        client = self.CoinbaseClient()
+        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
+            client.limit_order_buy(product_id='BTC-USD', size='0.1', price='not-a-price')
+        self.mock_logger_instance.error.assert_called_with("Invalid price format for limit_order_buy: not-a-price. Not a valid number string.")
+
+    def test_limit_order_sell_invalid_price_non_positive(self):
+        """Test limit_order_sell with a non-positive price."""
+        client = self.CoinbaseClient()
+        # Test with a negative price
+        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
+            client.limit_order_sell(product_id='BTC-USD', size='0.1', price='-100')
+        self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_sell: -100.')
+
+        # Test with a zero price
+        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
+            client.limit_order_sell(product_id='BTC-USD', size='0.1', price='0')
+        self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_sell: 0.')
+
+    def test_limit_order_sell_invalid_price_non_numeric(self):
+        """Test limit_order_sell with a non-numeric price string."""
+        client = self.CoinbaseClient()
+        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
+            client.limit_order_sell(product_id='BTC-USD', size='0.1', price='not-a-price')
+        self.mock_logger_instance.error.assert_called_with("Invalid price format for limit_order_sell: not-a-price. Not a valid number string.")
 
     def test_limit_order_buy_http_error(self):
         """Test limit_order_buy handles HTTPError."""
@@ -429,6 +749,28 @@ class TestCoinbaseClient(unittest.TestCase):
             post_only=True
         )
         self.mock_logger_instance.info.assert_called_with('Limit sell order placed successfully for BTC-USD. Order ID: test_sell_order_id_123')
+
+    def test_limit_order_sell_success_small_price(self):
+        """Test successful placement of a limit sell order with a small price."""
+        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = {
+            'success': True,
+            'order_id': 'test_sell_order_id_small_price'
+        }
+        client = self.CoinbaseClient()
+        with patch.object(client, '_generate_client_order_id', return_value='test_client_sell_id_small_price'):
+            result = client.limit_order_sell(product_id='DOGE-USD', size='10', price='1')
+
+        self.assertIsNotNone(result)
+        self.assertTrue(result['success'])
+        self.assertEqual(result['order_id'], 'test_sell_order_id_small_price')
+        self.mock_rest_client_instance.limit_order_gtc_sell.assert_called_once_with(
+            client_order_id='test_client_sell_id_small_price',
+            product_id='DOGE-USD',
+            base_size='10',
+            limit_price='1',
+            post_only=True
+        )
+        self.mock_logger_instance.info.assert_called_with('Limit sell order placed successfully for DOGE-USD. Order ID: test_sell_order_id_small_price')
 
     def test_limit_order_sell_api_failure(self):
         """Test API failure during limit sell order placement."""
@@ -685,6 +1027,102 @@ class TestCoinbaseClient(unittest.TestCase):
         self.assertIsNone(candles)
         self.mock_logger_instance.warning.assert_called_with(
             "get_product_candles for BTC-USD response format not recognized or key data missing: {'data': 'no candles here'}"
+        )
+
+    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
+    def test_limit_order_buy_success(self, mock_generate_id):
+        """Test a successful limit buy order."""
+        client_order_id = "test_client_order_id_buy_success"
+        mock_generate_id.return_value = client_order_id
+        product_id = "BTC-USD"
+        base_size = "0.001"
+        limit_price = "30000.00"
+        api_response = {"success": True, "order_id": "buy_order_id_1"}
+        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = api_response
+
+        expected_response = {
+            "success": True,
+            "order_id": "buy_order_id_1",
+            "client_order_id": client_order_id,
+            "product_id": product_id,
+            "side": "BUY",
+            "size": base_size,
+            "price": limit_price,
+        }
+
+        client = self.CoinbaseClient()
+        response = client.limit_order_buy(product_id, base_size, limit_price)
+        self.assertEqual(response, expected_response)
+        self.mock_rest_client_instance.limit_order_gtc_buy.assert_called_once()
+        self.mock_logger_instance.info.assert_any_call(
+            f"Limit buy order placed successfully for {product_id}. Order ID: {api_response.get('order_id')}"
+        )
+
+    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
+    def test_limit_order_buy_api_failure(self, mock_generate_id):
+        """Test a failed limit buy order due to an API error."""
+        mock_generate_id.return_value = "test_client_order_id_buy_fail"
+        product_id = "BTC-USD"
+        base_size = "0.001"
+        limit_price = "30000.00"
+        error_response = {
+            "success": False,
+            "error_response": {"message": "Insufficient funds"},
+        }
+        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = error_response
+        client = self.CoinbaseClient()
+        response = client.limit_order_buy(product_id, base_size, limit_price)
+        self.assertIsNone(response)
+        self.mock_logger_instance.error.assert_any_call(
+            f"Limit buy order failed for {product_id}. Reason: Insufficient funds"
+        )
+
+    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
+    def test_limit_order_sell_success(self, mock_generate_id):
+        """Test a successful limit sell order."""
+        client_order_id = "test_client_order_id_sell_success"
+        mock_generate_id.return_value = client_order_id
+        product_id = "BTC-USD"
+        base_size = "0.001"
+        limit_price = "31000.00"
+        api_response = {"success": True, "order_id": "sell_order_id_1"}
+        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = api_response
+
+        expected_response = {
+            "success": True,
+            "order_id": "sell_order_id_1",
+            "client_order_id": client_order_id,
+            "product_id": product_id,
+            "side": "SELL",
+            "size": base_size,
+            "price": limit_price,
+        }
+
+        client = self.CoinbaseClient()
+        response = client.limit_order_sell(product_id, base_size, limit_price)
+        self.assertEqual(response, expected_response)
+        self.mock_rest_client_instance.limit_order_gtc_sell.assert_called_once()
+        self.mock_logger_instance.info.assert_any_call(
+            f"Limit sell order placed successfully for {product_id}. Order ID: {api_response.get('order_id')}"
+        )
+
+    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
+    def test_limit_order_sell_api_failure(self, mock_generate_id):
+        """Test a failed limit sell order due to an API error."""
+        mock_generate_id.return_value = "test_client_order_id_sell_fail"
+        product_id = "BTC-USD"
+        base_size = "0.001"
+        limit_price = "31000.00"
+        error_response = {
+            "success": False,
+            "error_response": {"message": "Invalid product"},
+        }
+        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = error_response
+        client = self.CoinbaseClient()
+        response = client.limit_order_sell(product_id, base_size, limit_price)
+        self.assertIsNone(response)
+        self.mock_logger_instance.error.assert_any_call(
+            f"Limit sell order failed for {product_id}. Reason: Invalid product"
         )
 
     @patch("coinbase_client.CoinbaseClient._generate_client_order_id")

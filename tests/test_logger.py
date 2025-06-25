@@ -231,6 +231,92 @@ class TestLogger(unittest.TestCase):
             "FileHandler should not be present if dir not writable.",
         )
 
+    def test_config_import_error_fallback(self):
+        """
+        Test logger fallback when config.py cannot be imported by mocking the
+        import mechanism itself to reliably trigger the exception.
+        """
+        # Keep a reference to the original import function
+        original_import = __import__
+
+        def import_mock(name, *args, **kwargs):
+            if name == CONFIG_MODULE_NAME:
+                raise ImportError(f"Simulated import error for {name}")
+            return original_import(name, *args, **kwargs)
+
+        with mock.patch("builtins.__import__", side_effect=import_mock):
+            # Reload the logger. The patch will intercept the 'from config import ...'
+            # and raise an ImportError, which triggers the fallback logic.
+            logger_module = self._load_logger_module()
+
+            # Assert that the module-level constants were set to the fallback values.
+            self.assertEqual(logger_module.LOG_LEVEL, "ERROR")
+            self.assertEqual(
+                logger_module.LOG_FILE, "critical_error_logger_fallback.log"
+            )
+
+            # Check that the logger's actual level was set correctly.
+            app_logger = logging.getLogger(logger_module.APP_LOGGER_NAME)
+            self.assertEqual(app_logger.level, logging.ERROR)
+
+        # After the 'with' block, the import mechanism is restored.
+        # We must reload the logger again to restore its state for other tests,
+        # which expect the mock config from setUp to be in effect.
+        self._load_logger_module()
+
+    def test_config_assertion_error_fallback(self):
+        """Test logger fallback when config.py has invalid values."""
+        # Configure the mock config with an invalid value that triggers an assertion
+        self.mock_config.LOG_LEVEL = "INVALID_LEVEL"
+
+        # Use assertLogs to capture the output of the logger at the module level
+        with self.assertLogs(LOGGER_MODULE_NAME, level="CRITICAL") as cm:
+            # Reload the logger module to trigger the assertion error
+            logger_module = self._load_logger_module()
+
+            # Assert that fallback values are used
+            self.assertEqual(logger_module.LOG_LEVEL, "ERROR")
+            self.assertEqual(
+                logger_module.LOG_FILE, "critical_error_logger_fallback.log"
+            )
+
+            # Assert that a critical error was logged
+            self.assertIn("Logger config error", cm.output[0])
+
+    def test_file_handler_creation_io_error(self):
+        """Test behavior when creating the FileHandler raises an IOError."""
+        # Get a local reference to the real FileHandler class before it's patched.
+        from logging import FileHandler
+
+        with mock.patch(
+            f"{LOGGER_MODULE_NAME}.logging.FileHandler",
+            side_effect=IOError("Permission denied"),
+        ), mock.patch(f"logger.logging.Logger.error") as mock_logger_error:
+            # Reload the logger module to trigger the setup logic with the patch.
+            logger_module = self._load_logger_module()
+
+            # 1. Assert that the error was logged.
+            mock_logger_error.assert_called_once()
+            self.assertIn(
+                "Could not create or open log file", mock_logger_error.call_args[0][0]
+            )
+
+            # 2. Assert that the module's state reflects that file logging is disabled.
+            self.assertFalse(
+                logger_module._file_logging_enabled,
+                "_file_logging_enabled should be False after IOError.",
+            )
+
+            # 3. Assert that no FileHandler was ultimately added to the logger.
+            app_logger = logging.getLogger(logger_module.APP_LOGGER_NAME)
+            # Use the local, un-patched reference to FileHandler for the type check.
+            has_file_handler = any(
+                isinstance(h, FileHandler) for h in app_logger.handlers
+            )
+            self.assertFalse(
+                has_file_handler, "FileHandler should not be added on IOError."
+            )
+
     def _get_actual_config(self):
         """Helper to get a fresh import of the config module with current env vars."""
         # Temporarily remove config from sys.modules to ensure fresh import

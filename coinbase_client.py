@@ -127,6 +127,8 @@ class CoinbaseClient:
             )
             return None
         except Exception as e:
+            if isinstance(e, AssertionError):
+                raise  # Do not suppress assertion failures
             self.logger.error(
                 f"An unexpected error occurred while retrieving accounts: {e}", exc_info=True
             )
@@ -301,6 +303,8 @@ class CoinbaseClient:
             )
             return None
         except Exception as e:
+            if isinstance(e, AssertionError):
+                raise  # Do not suppress assertion failures
             self.logger.error(
                 f"An unexpected error occurred while retrieving order book for {product_id}: {e}", exc_info=True
             )
@@ -328,10 +332,18 @@ class CoinbaseClient:
             self.logger.debug("Raw get_products response received.")
 
             products_list = []
+            # This handles the SDK returning a response object with a .products attribute
             if hasattr(response, "products") and isinstance(response.products, list):
                 products_list = response.products
+            # This handles the SDK returning a dictionary
             elif isinstance(response, dict) and "products" in response:
-                products_list = response.get("products", [])
+                products_value = response.get("products")
+                if isinstance(products_value, list):
+                    products_list = products_value
+                else:
+                    # Log a warning if 'products' is not a list
+                    self.logger.warning(f"Unexpected type for 'products' in API response: {type(products_value)}")
+                    # products_list remains empty, leading to a 'not found' warning later.
             else:
                 self.logger.warning(f"Unexpected format for get_products response: {type(response)}")
 
@@ -392,6 +404,9 @@ class CoinbaseClient:
             )
             return None
         except Exception as e:
+            # Do not swallow assertion errors, as they indicate a contract violation
+            if isinstance(e, AssertionError):
+                raise
             self.logger.error(
                 f"An unexpected error occurred while retrieving product {product_id}: {e}", exc_info=True
             )
@@ -474,7 +489,15 @@ class CoinbaseClient:
                 }
                 return processed_response
             else:
-                failure_reason = response.get("failure_reason", "Unknown reason")
+                # Try to extract the reason from the nested 'error_response' first
+                failure_reason = response.get("error_response", {}).get("message")
+                # If not found, fall back to 'failure_reason' at the top level
+                if not failure_reason:
+                    failure_reason = response.get("failure_reason")
+                # If still not found, use a generic message
+                if not failure_reason:
+                    failure_reason = "Unknown reason"
+
                 self.logger.error(
                     f"Limit buy order failed for {product_id}. Reason: {failure_reason}"
                 )
@@ -575,7 +598,15 @@ class CoinbaseClient:
                 }
                 return processed_response
             else:
-                failure_reason = response.get("failure_reason", "Unknown reason")
+                # Try to extract the reason from the nested 'error_response' first
+                failure_reason = response.get("error_response", {}).get("message")
+                # If not found, fall back to 'failure_reason' at the top level
+                if not failure_reason:
+                    failure_reason = response.get("failure_reason")
+                # If still not found, use a generic message
+                if not failure_reason:
+                    failure_reason = "Unknown reason"
+
                 self.logger.error(
                     f"Limit sell order failed for {product_id}. Reason: {failure_reason}"
                 )
@@ -690,7 +721,12 @@ class CoinbaseClient:
                     if result.get("success"):
                         self.logger.info(f"Order {order_id} cancelled successfully.")
                     else:
-                        failure_reason = result.get("failure_reason", "Unknown reason")
+                        failure_reason = result.get("error_response", {}).get("message")
+                        if not failure_reason:
+                            failure_reason = result.get("failure_reason")
+                        if not failure_reason:
+                            failure_reason = "Unknown reason"
+
                         self.logger.error(
                             f"Failed to cancel order {order_id}. Reason: {failure_reason}"
                         )

@@ -16,6 +16,7 @@ flake8==6.1.0         # For code style and quality checks (PEP8)
 bandit==1.7.5         # For finding common security issues
 pytest-cov==4.1.0
 pytest-mock==3.10.0    # For mocking dependencies during testing
+mutmut==2.4.1          # For mutation testing
 
 # Documentation
 # sphinx==7.1.2       # Uncomment if Sphinx documentation will be generated
