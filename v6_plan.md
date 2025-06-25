@@ -32,28 +32,35 @@ The new bot will reside in `/home/gman/workspace/Crypto-Bots/Active/Single-File/
 ```
 /home/gman/workspace/Crypto-Bots/Active/Single-File/v6/
 ├── main.py                 # Main entry point, orchestrates bot execution cycle.
-├── config.py               # Holds all static configurations (trading pairs, RSI settings, file paths, etc.) and loads API keys from environment variables.
-├── coinbase_client.py      # Thin wrapper for all Coinbase API interactions (getting data, placing orders).
+├── config.py               # Holds all static configurations.
+├── coinbase_client.py      # Thin wrapper for all Coinbase API interactions.
 ├── technical_analysis.py   # Functions for calculating technical indicators (e.g., RSI).
-├── trading_logic.py        # Core decision-making: should_buy, determine_sell_orders, manage trade cycle per asset.
-├── persistence.py          # Simple functions to save/load the initial buy price for an asset.
-├── logger.py               # Basic logging setup and utility functions.
+├── trading/                  # Package for core trading logic.
+│   ├── __init__.py
+│   ├── trade_manager.py      # Orchestrates the trade cycle for each asset.
+│   ├── signal_analyzer.py    # Analyzes market data to generate buy/sell signals.
+│   └── order_calculator.py   # Calculates order sizes and prices.
+├── persistence.py          # Handles saving/loading of trade state.
+├── logger.py               # Basic logging setup.
 ├── requirements.txt        # Python package dependencies.
-├── .gitignore              # Specifies intentionally untracked files that Git should ignore.
+├── .gitignore              # Specifies intentionally untracked files.
 └── v6_plan.md              # This planning document.
 ```
 
 ### File Purposes:
 
-*   **`main.py`**: Orchestrates the bot's lifecycle. Initializes components, iterates through configured trading pairs, and calls functions from `trading_logic.py`.
-*   **`config.py`**: Centralized configuration. Includes API key loading (from environment variables), definitions for trading pairs (BTC-USD, ETH-USD, LTC-USD) with their specific parameters (RSI settings, profit tiers, min trade sizes, candle granularity, buy price file names).
-*   **`coinbase_client.py`**: Provides an abstraction layer over the `coinbase-advanced-py` library. Contains functions like `get_account_balance`, `get_product_candles`, `get_order_book`, `place_limit_order`, `cancel_order`, `get_open_orders`. Each function will handle API call specifics and basic error checking.
-*   **`technical_analysis.py`**: Implements functions to calculate necessary technical indicators. The primary one will be `calculate_rsi` based on the logic derived from the R-bot (14-period, 15-min candles, specific entry conditions).
-*   **`trading_logic.py`**: Contains the core intelligence. Functions like `should_buy_asset` (evaluates RSI conditions), `determine_sell_orders` (calculates tiered sell prices and sizes), and `process_asset_trade` (manages the buy/sell cycle for a single asset).
-*   **`persistence.py`**: Handles the simple file I/O for storing and retrieving the buy price of an asset (e.g., `save_buy_price(asset_id, price)`, `load_buy_price(asset_id)`).
-*   **`logger.py`**: Configures a simple logger (e.g., using Python's `logging` module) to output information about bot actions, decisions, and errors to the console and/or a log file.
+*   **`main.py`**: Orchestrates the bot's lifecycle. Initializes components, iterates through configured trading pairs, and calls the `TradeManager`.
+*   **`config.py`**: Centralized configuration. Includes API key loading, definitions for trading pairs with their specific parameters (RSI settings, profit tiers, etc.).
+*   **`coinbase_client.py`**: Provides an abstraction layer over the `coinbase-advanced-py` library, handling all API call specifics and basic error checking.
+*   **`technical_analysis.py`**: Implements functions to calculate necessary technical indicators, primarily `calculate_rsi`.
+*   **`trading/`**: A package containing the core trading logic, broken into specialized modules.
+    *   **`trade_manager.py`**: Contains the `TradeManager` class, which orchestrates the entire buy/sell cycle for a single asset, checking for open orders, evaluating new buy signals, and placing sell orders.
+    *   **`signal_analyzer.py`**: Contains functions like `should_buy_asset` which evaluates RSI conditions and other indicators to generate a buy signal.
+    *   **`order_calculator.py`**: Contains functions to calculate the size and price for buy and sell orders, including the tiered profit-taking strategy.
+*   **`persistence.py`**: Handles the file I/O for storing and retrieving the state of trades (e.g., open buy orders, filled buy prices).
+*   **`logger.py`**: Configures a simple logger to output information about bot actions, decisions, and errors.
 *   **`requirements.txt`**: Lists all Python dependencies with their specific versions for reproducible environments.
-*   **`.gitignore`**: Standard git ignore file, including `.env`, `*_buy_price.txt`, `__pycache__`, virtual environment folders, IDE files, and log files.
+*   **`.gitignore`**: Standard git ignore file.
 *   **`v6_plan.md`**: This document, outlining the project goals, analysis, design, and progress.
 
 ## IV. Implementation Plan & Progress
@@ -71,7 +78,7 @@ This section tracks the development progress of the Crypto Trading Bot v6.
     *   [X] `bandit`: Security analysis performed.
         *   Findings in `coinbase_client.py` (B101 `assert_used`) reviewed and acknowledged as intentional.
         *   Findings in `tests/test_coinbase_client.py` (B108, B105, B106) addressed using `tempfile` and `#nosec` comments.
-    *   [X] `pytest`: All 56 unit tests across the project are passing.
+    *   [X] `pytest`: All 144 unit tests across the project are passing.
 
 **2. Module: `logger.py`**
 *   [X] Implement `logger.py` for console and file logging.
@@ -185,7 +192,12 @@ This section tracks the development progress of the Crypto Trading Bot v6.
                 *   Calculate buy order size based on `config_asset_params.buy_amount_usd` and current market price (e.g., from `client.get_product_book` or last candle close). Adjust for `base_increment`.
                 *   Place limit buy order using `client.limit_order_buy`.
                 *   If order placement successful, `save_open_buy_order` to persistence.
-*   [X] **Develop `tests/test_trading_logic.py` (including `tests/test_trading_logic_process.py`):**
+*   [X] **Test Suite Refactoring:**
+    *   [X] Consolidated all process-related tests into `tests/test_trading_logic_process.py`.
+    *   [X] Consolidated all unit tests into `tests/test_trading_logic_units.py`.
+    *   [X] Removed the redundant `tests/test_trading_logic.py`.
+    *   [X] All 144 tests are passing after refactoring.
+*   [X] **Develop `tests/test_trading_logic_units.py` and `tests/test_trading_logic_process.py`:**
     *   [X] Mock all dependencies (`CoinbaseClient`, `technical_analysis`, `persistence`, `config`).
     *   [X] Test `should_buy_asset` with various RSI series.
     *   [X] Test `determine_sell_orders_params` for correct price/quantity calculations and adjustments.
