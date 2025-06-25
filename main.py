@@ -18,7 +18,8 @@ import config
 import coinbase_client
 import persistence
 import technical_analysis
-import trading_logic
+from trading import signal_analyzer, order_calculator
+from trading.trade_manager import TradeManager
 from logger import get_logger
 
 
@@ -43,21 +44,23 @@ def run_bot() -> None:
 
         # The persistence module is used directly; its directory is created on import.
 
+        # Initialize the TradeManager once, outside the loop
+        trade_manager = TradeManager(
+            client=client,
+            persistence_manager=persistence,
+            ta_module=technical_analysis,
+            config_module=config,
+            logger=logger,
+            signal_analyzer=signal_analyzer,
+            order_calculator=order_calculator,
+        )
+
         # Process each configured trading pair
         logger.info(f"Processing {len(config.TRADING_PAIRS)} configured trading pairs.")
         for asset_id in config.TRADING_PAIRS:
             logger.info(f"--- Starting trade cycle for {asset_id} ---")
             try:
-                # Pass the required modules to the processing function.
-                # The persistence module itself acts as the 'persistence_manager'.
-                trading_logic.process_asset_trade_cycle(
-                    asset_id=asset_id,
-                    client=client,
-                    persistence_manager=persistence,  # Pass the module directly
-                    ta_module=technical_analysis,
-                    config_module=config,
-                    logger=logger,
-                )
+                trade_manager.process_asset_trade_cycle(asset_id=asset_id)
             except Exception as e:
                 logger.error(
                     f"An unexpected error occurred while processing asset {asset_id}: {e}",

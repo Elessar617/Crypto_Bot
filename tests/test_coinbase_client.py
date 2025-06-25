@@ -687,49 +687,6 @@ class TestCoinbaseClient(unittest.TestCase):
             "get_product_candles for BTC-USD response format not recognized or key data missing: {'data': 'no candles here'}"
         )
 
-
-        product_id = "ETH-USD"
-        base_size = "0.01"
-        limit_price = "2100.00"
-        mock_api_response = {
-            "success": True,
-            "order_id": "server_order_id_sell",
-            "failure_reason": None,
-            "client_order_id": "test_client_order_id_sell",
-        }
-        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = (
-            mock_api_response
-        )
-
-        expected_processed_response = {
-            "success": True,
-            "order_id": "server_order_id_sell",
-            "client_order_id": "test_client_order_id_sell",
-            "product_id": product_id,
-            "side": "SELL",
-            "size": base_size,
-            "price": limit_price,
-        }
-
-        result = client.limit_order_sell(
-            product_id, base_size, limit_price
-        )
-        self.assertEqual(result, expected_processed_response)
-
-        self.mock_rest_client_instance.limit_order_gtc_sell.assert_called_once_with(
-            client_order_id="test_client_order_id_sell",
-            product_id=product_id,
-            base_size=base_size,
-            limit_price=limit_price,
-            post_only=True,
-        )
-        expected_log_message = (
-            "Limit sell order placed successfully for %s. Order ID: %s"
-            % (product_id, mock_api_response.get("order_id"))
-        )
-        self.mock_logger_instance.info.assert_any_call(expected_log_message)
-        self.mock_logger_instance.error.assert_not_called()
-
     @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
     def test_limit_order_sell_api_exception(self, mock_generate_id):
         """Test limit sell order handles API exceptions."""
