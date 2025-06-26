@@ -14,12 +14,8 @@ import time
 import types
 
 # Internal modules
+# Only import modules needed for initialization before other modules are loaded.
 import config
-import coinbase_client
-import persistence
-import technical_analysis
-from trading import signal_analyzer, order_calculator
-from trading.trade_manager import TradeManager
 from logger import LoggerDirectoryError, get_logger, setup_logging
 
 
@@ -40,6 +36,13 @@ def run_bot() -> None:
         )
         logger = get_logger()
         logger.info("--- Starting v6 crypto trading bot run ---")
+
+        # Import other modules after the logger is configured.
+        import coinbase_client
+        import persistence
+        import technical_analysis
+        from trading import signal_analyzer, order_calculator
+        from trading.trade_manager import TradeManager
     except (LoggerDirectoryError, ValueError) as e:
         # If logger setup fails, there's no logger. Print to stderr and exit.
         print(f"CRITICAL: Logger initialization failed: {e}", file=sys.stderr)

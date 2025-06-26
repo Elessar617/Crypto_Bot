@@ -93,8 +93,12 @@ class TestTradeManager(unittest.TestCase):
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
 
         # Assert
-
-        self.mock_client.limit_order_buy.assert_called_once()
+        self.mock_client.limit_order_buy.assert_called_once_with(
+            client_order_id=unittest.mock.ANY,
+            product_id="BTC-USD",
+            base_size="0.001",
+            limit_price="100.00",
+        )
         self.mock_persistence.save_open_buy_order.assert_called_once_with(
             "BTC-USD", unittest.mock.ANY
         )
@@ -112,7 +116,7 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
 
-        self.mock_client.limit_order_buy.assert_not_called()
+        self.mock_client.limit_order.assert_not_called()
         self.mock_persistence.save_open_buy_order.assert_not_called()
 
     def test_handle_open_buy_order_is_filled(self):

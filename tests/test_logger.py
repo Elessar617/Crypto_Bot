@@ -37,313 +37,109 @@ except ImportError as e:
 
 class TestLogger(unittest.TestCase):
     def setUp(self):
-        """Set up test environment for each test."""
-        self.test_log_dir = tempfile.mkdtemp(prefix="test_logs_")
-        self.addCleanup(shutil.rmtree, self.test_log_dir)
+        """Set up a clean environment for each logger test."""
+        # Save original modules to restore them later. This is critical for isolation.
+        self.original_modules = {
+            'config': sys.modules.pop('config', None),
+            'logger': sys.modules.pop('logger', None)
+        }
+        self.addCleanup(self._restore_modules)
 
-        # Create a mock config object
-        # Use spec=config_module_actual if available for a more accurate mock
-        self.mock_config = mock.MagicMock(
-            spec=config_module_actual if config_module_actual else object
-        )
-        self.mock_config.PERSISTENCE_DIR = self.test_log_dir
+        # Create a temporary directory for logs
+        self.test_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.test_dir)
+
+        # Create and inject a mock config module
+        self.mock_config = mock.MagicMock(spec=config_module_actual)
+        self.mock_config.PERSISTENCE_DIR = self.test_dir
         self.mock_config.LOG_FILE = "test_app.log"
-        self.mock_config.LOG_LEVEL = "DEBUG"  # Default for tests
+        self.mock_config.LOG_LEVEL = "DEBUG"
+        sys.modules['config'] = self.mock_config
 
-        # 1. Replace the 'config' module in sys.modules with our mock_config.
-        #    This must be done *before* logger.py is re-imported so that its
-        #    'from config import ...' statement picks up the mock.
-        #    Store the original config module if it exists, to restore in tearDown/addCleanup.
-        self.original_config_module = sys.modules.get(CONFIG_MODULE_NAME)
-        self.sys_modules_patcher = mock.patch.dict(
-            sys.modules, {CONFIG_MODULE_NAME: self.mock_config}
-        )
-        self.sys_modules_patcher.start()
-
-        def stop_sys_modules_patch():
-            self.sys_modules_patcher.stop()
-            # Restore original config module if it existed, otherwise remove the mock
-            if self.original_config_module:
-                sys.modules[CONFIG_MODULE_NAME] = self.original_config_module
-            elif (
-                CONFIG_MODULE_NAME in sys.modules
-                and sys.modules[CONFIG_MODULE_NAME] is self.mock_config
-            ):
-                del sys.modules[CONFIG_MODULE_NAME]
-
-        self.addCleanup(stop_sys_modules_patch)
-
-        # 2. Remove the original logger module from sys.modules to force a full re-import.
-        #    This is crucial if logger.py has module-level constants derived from config.
-        if LOGGER_MODULE_NAME in sys.modules:
-            del sys.modules[LOGGER_MODULE_NAME]
-
-        # 3. Re-import the logger module. It will now execute its top-level statements
-        #    (including 'from config import ...') using the patched config.
+        # Import a fresh copy of the logger for each test
         self.logger_module = importlib.import_module(LOGGER_MODULE_NAME)
 
-        # The _logger_configured flag logic is removed as logger.py's current structure
-        # reconfigures itself at module level on import by clearing existing handlers.
+    def _restore_modules(self):
+        """Cleanup function to restore sys.modules."""
+        for name, module in self.original_modules.items():
+            if module:
+                sys.modules[name] = module
+            else:
+                sys.modules.pop(name, None)
 
-        # Mock os.makedirs to control its behavior if needed, though with tempfile it might not be necessary
-        # unless testing specific failure paths of directory creation itself.
-        self.mock_makedirs = mock.patch("os.makedirs").start()
-        self.addCleanup(
-            mock.patch.stopall
-        )  # Stops all patches started with patch().start()
-
-        # Get a logger instance for tests to use, it should now be configured with mocks
-        self.logger = self.logger_module.get_logger()
-
-    def tearDown(self):
-        """Clean up after each test."""
-        # Stop all patches started with patch() or self.config_patcher.start()
-        # self.addCleanup handles this, but explicit stopall can be here too if preferred.
-        # mock.patch.stopall() # This is now handled by addCleanup
-
-        # Reset logger configuration state if necessary, though setUp should handle it for next test.
-        # Clear any handlers that might have been added to the root logger directly or by other means
-        # to prevent interference between tests.
-        root_logger = logging.getLogger()
-        if hasattr(root_logger, "handlers"):
-            for handler in list(root_logger.handlers):
-                root_logger.removeHandler(handler)
-            root_logger.handlers.clear()
-
-        # Also specifically for the app logger if it's different and might persist handlers
-        app_logger = logging.getLogger(self.logger_module.APP_LOGGER_NAME)
-        if hasattr(app_logger, "handlers"):
-            for handler in list(app_logger.handlers):
-                app_logger.removeHandler(handler)
-            app_logger.handlers.clear()
-
-        # Ensure _logger_configured is reset for the actual module if it was reloaded
-        # This is more robustly handled in setUp by removing from sys.modules and re-importing.
-        # if logger_module_actual and hasattr(logger_module_actual, '_logger_configured'):
-        #     logger_module_actual._logger_configured = False
-
-    def test_get_logger_instance(self):
-        """Test that get_logger() returns a configured logger instance."""
+    def test_successful_initialization(self):
+        """Test that a logger can be initialized successfully."""
+        self.logger_module.setup_logging(
+            level=self.mock_config.LOG_LEVEL,
+            log_file=self.mock_config.LOG_FILE,
+            persistence_dir=self.mock_config.PERSISTENCE_DIR,
+        )
         logger = self.logger_module.get_logger()
         self.assertIsInstance(logger, logging.Logger)
         self.assertEqual(logger.name, self.logger_module.APP_LOGGER_NAME)
         self.assertEqual(logger.level, logging.DEBUG)
 
-    def test_log_directory_and_file_creation(self):
-        """Test that the log directory and file are created."""
-        self.assertTrue(
-            os.path.isdir(self.test_log_dir), "Log directory was not created."
-        )
-        logger = self.logger_module.get_logger()
-        logger.info("Test message for file creation.")
-        # Adjusted path to include 'logs' subdirectory
-        expected_log_file_path = os.path.join(self.test_log_dir, "logs", "test_app.log")
-        self.assertTrue(
-            os.path.isfile(expected_log_file_path),
-            f"Log file was not created at {expected_log_file_path}.",
-        )
+        # Check that handlers are present
+        has_stream_handler = any(isinstance(h, logging.StreamHandler) for h in logger.handlers)
+        has_file_handler = any(isinstance(h, logging.FileHandler) for h in logger.handlers)
+        self.assertTrue(has_stream_handler, "No StreamHandler found.")
+        self.assertTrue(has_file_handler, "No FileHandler found.")
+
+        # Check that the log directory and file were created
+        log_dir = os.path.join(self.test_dir, "logs")
+        log_file = os.path.join(log_dir, self.mock_config.LOG_FILE)
+        self.assertTrue(os.path.isdir(log_dir), "Log directory was not created.")
+        self.assertTrue(os.path.isfile(log_file), f"Log file was not created at {log_file}.")
 
     def test_logging_to_file(self):
         """Test that messages are written to the log file."""
+        self.logger_module.setup_logging(
+            level=self.mock_config.LOG_LEVEL,
+            log_file=self.mock_config.LOG_FILE,
+            persistence_dir=self.mock_config.PERSISTENCE_DIR,
+        )
         logger = self.logger_module.get_logger()
-        test_message = "This is a unique test message for file logging."
+        test_message = "This is a test message for file logging."
         logger.info(test_message)
 
-        for handler in logger.handlers:
-            if isinstance(handler, logging.FileHandler):
-                handler.flush()
+        log_file_path = os.path.join(self.test_dir, "logs", self.mock_config.LOG_FILE)
+        with open(log_file_path, "r") as f:
+            content = f.read()
+        self.assertIn(test_message, content)
 
-        # Adjusted path to include 'logs' subdirectory
-        expected_log_file_path = os.path.join(self.test_log_dir, "logs", "test_app.log")
-        with open(expected_log_file_path, "r") as f:
-            log_content = f.read()
-        self.assertIn(test_message, log_content)
-        self.assertIn("INFO", log_content)
+    def test_log_directory_creation_failure(self):
+        """Test logger raises LoggerDirectoryError when directory creation fails."""
+        self.logger_module._reset_logger()
 
-    def test_console_handler_present(self):
-        """Test that a console handler (StreamHandler) is present."""
-        logger = self.logger_module.get_logger()
-        has_stream_handler = any(
-            isinstance(h, logging.StreamHandler) for h in logger.handlers
-        )
-        self.assertTrue(
-            has_stream_handler, "No StreamHandler found for console logging."
-        )
-
-    @mock.patch(f"{LOGGER_MODULE_NAME}.os.access")
-    @mock.patch(f"{LOGGER_MODULE_NAME}.os.path.exists")
-    def test_log_directory_creation_failure(
-        self, mock_logger_os_path_exists, mock_logger_os_access
-    ):
-        """Test logger behavior when log directory creation fails or is not writable."""
-        # Stop the global makedirs mock from setUp for this specific test
-        self.mock_makedirs.stop()
-
-        # Scenario 1: os.makedirs raises OSError
-        with mock.patch(
-            f"{LOGGER_MODULE_NAME}.os.makedirs",
-            side_effect=OSError("Permission denied"),
-        ) as mock_failing_makedirs:  # noqa: F841
-            # Ensure config is re-evaluated by removing and re-importing logger module
-            if LOGGER_MODULE_NAME in sys.modules:
-                del sys.modules[LOGGER_MODULE_NAME]
-            temp_logger_module_fail_create = importlib.import_module(LOGGER_MODULE_NAME)
-
-            # Assert that _file_logging_enabled is False in the re-imported module
-            self.assertFalse(
-                temp_logger_module_fail_create._file_logging_enabled,
-                "_file_logging_enabled should be False when makedirs fails.",
-            )
-
-            # Assert that no FileHandler was added to the logger instance
-            logger_instance = temp_logger_module_fail_create._logger
-            has_file_handler = any(
-                isinstance(h, logging.FileHandler) for h in logger_instance.handlers
-            )
-            self.assertFalse(
-                has_file_handler,
-                "FileHandler should not be present if directory creation failed.",
-            )
-
-        # Restart the global makedirs mock for subsequent tests.
-        self.mock_makedirs.start()
-
-        # Scenario 2: Directory exists but is not writable (os.access returns False)
-        # Configure mocks for this scenario
-        mock_logger_os_path_exists.return_value = True  # Directory exists
-        mock_logger_os_access.return_value = False  # Directory not writable
-
-        if LOGGER_MODULE_NAME in sys.modules:
-            del sys.modules[LOGGER_MODULE_NAME]
-        temp_logger_module_not_writable = importlib.import_module(LOGGER_MODULE_NAME)
-
-        self.assertFalse(
-            temp_logger_module_not_writable._file_logging_enabled,
-            "_file_logging_enabled should be False when dir not writable.",
-        )
-        logger_instance_not_writable = temp_logger_module_not_writable._logger
-        has_file_handler_not_writable = any(
-            isinstance(h, logging.FileHandler)
-            for h in logger_instance_not_writable.handlers
-        )
-        self.assertFalse(
-            has_file_handler_not_writable,
-            "FileHandler should not be present if dir not writable.",
-        )
-
-    def test_config_import_error_fallback(self):
-        """
-        Test logger fallback when config.py cannot be imported by mocking the
-        import mechanism itself to reliably trigger the exception.
-        """
-        # Keep a reference to the original import function
-        original_import = __import__
-
-        def import_mock(name, *args, **kwargs):
-            if name == CONFIG_MODULE_NAME:
-                raise ImportError(f"Simulated import error for {name}")
-            return original_import(name, *args, **kwargs)
-
-        with mock.patch("builtins.__import__", side_effect=import_mock):
-            # Reload the logger. The patch will intercept the 'from config import ...'
-            # and raise an ImportError, which triggers the fallback logic.
-            logger_module = self._load_logger_module()
-
-            # Assert that the module-level constants were set to the fallback values.
-            self.assertEqual(logger_module.LOG_LEVEL, "ERROR")
-            self.assertEqual(
-                logger_module.LOG_FILE, "critical_error_logger_fallback.log"
-            )
-
-            # Check that the logger's actual level was set correctly.
-            app_logger = logging.getLogger(logger_module.APP_LOGGER_NAME)
-            self.assertEqual(app_logger.level, logging.ERROR)
-
-        # After the 'with' block, the import mechanism is restored.
-        # We must reload the logger again to restore its state for other tests,
-        # which expect the mock config from setUp to be in effect.
-        self._load_logger_module()
-
-    def test_config_assertion_error_fallback(self):
-        """Test logger fallback when config.py has invalid values."""
-        # Configure the mock config with an invalid value that triggers an assertion
-        self.mock_config.LOG_LEVEL = "INVALID_LEVEL"
-
-        # Use assertLogs to capture the output of the logger at the module level
-        with self.assertLogs(LOGGER_MODULE_NAME, level="CRITICAL") as cm:
-            # Reload the logger module to trigger the assertion error
-            logger_module = self._load_logger_module()
-
-            # Assert that fallback values are used
-            self.assertEqual(logger_module.LOG_LEVEL, "ERROR")
-            self.assertEqual(
-                logger_module.LOG_FILE, "critical_error_logger_fallback.log"
-            )
-
-            # Assert that a critical error was logged
-            self.assertIn("Logger config error", cm.output[0])
+        # Patch os.makedirs just for this test to simulate failure
+        with mock.patch(f"{LOGGER_MODULE_NAME}.os.makedirs", side_effect=OSError("Permission denied")):
+            with self.assertRaises(self.logger_module.LoggerDirectoryError) as cm:
+                self.logger_module.setup_logging(
+                    level=self.mock_config.LOG_LEVEL,
+                    log_file=self.mock_config.LOG_FILE,
+                    persistence_dir=self.mock_config.PERSISTENCE_DIR,
+                )
+            self.assertIn("Failed to create log directory", str(cm.exception))
 
     def test_file_handler_creation_io_error(self):
         """Test behavior when creating the FileHandler raises an IOError."""
-        # Get a local reference to the real FileHandler class before it's patched.
-        from logging import FileHandler
+        self.logger_module._reset_logger()
 
-        with mock.patch(
-            f"{LOGGER_MODULE_NAME}.logging.FileHandler",
-            side_effect=IOError("Permission denied"),
-        ), mock.patch(f"logger.logging.Logger.error") as mock_logger_error:
-            # Reload the logger module to trigger the setup logic with the patch.
-            logger_module = self._load_logger_module()
-
-            # 1. Assert that the error was logged.
-            mock_logger_error.assert_called_once()
-            self.assertIn(
-                "Could not create or open log file", mock_logger_error.call_args[0][0]
+        # Patch FileHandler just for this test to simulate failure
+        with mock.patch(f"{LOGGER_MODULE_NAME}.logging.FileHandler", side_effect=IOError("Permission denied")):
+            # This call should handle the error gracefully and not raise an exception
+            self.logger_module.setup_logging(
+                level=self.mock_config.LOG_LEVEL,
+                log_file=self.mock_config.LOG_FILE,
+                persistence_dir=self.mock_config.PERSISTENCE_DIR,
             )
 
-            # 2. Assert that the module's state reflects that file logging is disabled.
-            self.assertFalse(
-                logger_module._file_logging_enabled,
-                "_file_logging_enabled should be False after IOError.",
-            )
-
-            # 3. Assert that no FileHandler was ultimately added to the logger.
-            app_logger = logging.getLogger(logger_module.APP_LOGGER_NAME)
-            # Use the local, un-patched reference to FileHandler for the type check.
-            has_file_handler = any(
-                isinstance(h, FileHandler) for h in app_logger.handlers
-            )
-            self.assertFalse(
-                has_file_handler, "FileHandler should not be added on IOError."
-            )
-
-    def _get_actual_config(self):
-        """Helper to get a fresh import of the config module with current env vars."""
-        # Temporarily remove config from sys.modules to ensure fresh import
-        original_config = sys.modules.pop(CONFIG_MODULE_NAME, None)
-        try:
-            config_module = importlib.import_module(CONFIG_MODULE_NAME)
-            return config_module
-        finally:
-            # Restore original config module if it existed, otherwise remove the new one
-            if original_config:
-                sys.modules[CONFIG_MODULE_NAME] = original_config
-            elif CONFIG_MODULE_NAME in sys.modules:
-                del sys.modules[CONFIG_MODULE_NAME]
-
-    def _load_logger_module(self):
-        """Helper to load/reload the logger module for a test."""
-        if LOGGER_MODULE_NAME in sys.modules:
-            # If entry exists but is not a module type, remove it to force fresh import
-            if not isinstance(sys.modules[LOGGER_MODULE_NAME], types.ModuleType):
-                del sys.modules[LOGGER_MODULE_NAME]
-                # After deletion, it will definitely go to the 'else' block of the next check
-
-        if LOGGER_MODULE_NAME in sys.modules:  # Re-check condition
-            self.logger_module = importlib.reload(sys.modules[LOGGER_MODULE_NAME])
-        else:
-            self.logger_module = importlib.import_module(LOGGER_MODULE_NAME)
-        return self.logger_module
+        # Verify that no FileHandler was actually added to the logger
+        app_logger = self.logger_module.get_logger()
+        has_file_handler = any(
+            isinstance(h, logging.FileHandler) for h in app_logger.handlers
+        )
+        self.assertFalse(has_file_handler, "FileHandler should not be added on IOError.")
 
 
 if __name__ == "__main__":

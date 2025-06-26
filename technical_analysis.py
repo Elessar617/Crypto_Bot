@@ -12,7 +12,7 @@ from logger import (
     get_logger,
 )  # Assuming logger.py is in the same directory or PYTHONPATH
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 def _validate_candles_df(candles_df: pd.DataFrame, indicator_name: str) -> bool:

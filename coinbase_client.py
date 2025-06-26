@@ -3,6 +3,7 @@
 import json
 import uuid
 from typing import Optional, Dict, Any, List
+from decimal import Decimal
 import sys
 from requests.exceptions import HTTPError, RequestException
 
@@ -209,6 +210,22 @@ class CoinbaseClient:
             self.logger.error(f"An unexpected error occurred on limit {side.lower()} for {product_id}: {e}", exc_info=True)
             return None
 
+    def limit_order_buy(
+        self, product_id: str, size: Decimal, price: Decimal
+    ) -> Optional[Dict[str, Any]]:
+        """A wrapper for limit_order specific to BUY orders."""
+        return self.limit_order(
+            side="BUY", product_id=product_id, size=str(size), price=str(price)
+        )
+
+    def limit_order_sell(
+        self, product_id: str, size: Decimal, price: Decimal
+    ) -> Optional[Dict[str, Any]]:
+        """A wrapper for limit_order specific to SELL orders."""
+        return self.limit_order(
+            side="SELL", product_id=product_id, size=str(size), price=str(price)
+        )
+
     def get_order(self, order_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves a single order by its ID."""
         self.logger.debug(f"Attempting to retrieve order {order_id}.")
@@ -234,7 +251,7 @@ class CoinbaseClient:
             self.logger.error(f"An unexpected error occurred while retrieving order {order_id}: {e}", exc_info=True)
             return None
 
-    def cancel_orders(self, order_ids: List[str]) -> Optional[Dict[str, Any]]:
+    def cancel_orders(self, order_ids: List[str]) -> Optional[List[Dict[str, Any]]]:
         """Cancels one or more open orders."""
         self.logger.debug(f"Attempting to cancel orders: {order_ids}")
         try:
@@ -246,24 +263,21 @@ class CoinbaseClient:
 
             assert isinstance(response_dict, dict), "cancel_orders response should be a dictionary."
 
-            if response_dict.get('success') is True:
-                self.logger.info(f"Cancel orders request appears successful for orders: {order_ids}")
-
             results = response_dict.get("results")
-            if results is not None:
-                assert isinstance(results, list), "'results' key should be a list."
-                for item in results:
-                    assert isinstance(item, dict), "Each item in 'results' should be a dictionary."
-                    if item.get("success"):
-                        self.logger.info(f"Successfully cancelled order {item.get('order_id')}.")
-                    else:
-                        error_details = item.get("error_response", {})
-                        reason = error_details.get("message", item.get("failure_reason", "Unknown reason"))
-                        self.logger.error(f"Failed to cancel order {item.get('order_id')}. Reason: {reason}")
-            elif 'success' not in response_dict:
-                self.logger.warning(f"Cancel orders response format not as expected: {response_dict}")
+            assert results is not None, "'results' key missing in response."
+            assert isinstance(results, list), "'results' key should be a list."
 
-            return response_dict
+            self.logger.info(f"Successfully processed cancel orders request for {order_ids}.")
+            for item in results:
+                assert isinstance(item, dict), "Each item in 'results' should be a dictionary."
+                if item.get("success"):
+                    self.logger.info(f"Successfully cancelled order {item.get('order_id')}.")
+                else:
+                    error_details = item.get("error_response", {})
+                    reason = error_details.get("message", item.get("failure_reason", "Unknown reason"))
+                    self.logger.error(f"Failed to cancel order {item.get('order_id')}. Reason: {reason}")
+
+            return results
         except (HTTPError, RequestException) as e:
             self.logger.error(f"Network error cancelling orders {order_ids}: {e}", exc_info=True)
             return None

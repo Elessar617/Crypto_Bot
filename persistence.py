@@ -9,7 +9,7 @@ from config import PERSISTENCE_DIR
 from logger import get_logger
 
 # Initialize logger for this module
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 def save_trade_state(asset_id: str, state_data: Dict[str, Any]) -> None:

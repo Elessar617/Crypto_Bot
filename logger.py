@@ -123,3 +123,22 @@ def get_logger() -> logging.Logger:
             "Logger not initialized. Please call setup_logging() before requesting a logger."
         )
     return _logger_instance
+
+
+def _reset_logger() -> None:
+    """
+    For testing purposes only. Resets the logger's state.
+
+    This function clears all handlers from the application logger and resets the
+    global instance variable. This is necessary for test isolation, allowing
+    logger setup to be tested multiple times without interference.
+    """
+    global _logger_instance
+    if _logger_instance:
+        logger = logging.getLogger(APP_LOGGER_NAME)
+        for handler in list(logger.handlers):
+            logger.removeHandler(handler)
+            handler.close()
+        # Reset propagate to its default value
+        logger.propagate = True
+        _logger_instance = None

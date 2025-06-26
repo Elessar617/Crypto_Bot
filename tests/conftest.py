@@ -9,6 +9,26 @@ import pytest
 import os
 from typing import Dict, Any, Generator
 
+# Added imports for logger setup
+from logger import setup_logging, LoggerDirectoryError
+import config as app_config  # Use alias to avoid pytest 'config' fixture conflict
+
+
+def pytest_configure(config):
+    """Initializes the logger once before any tests are collected."""
+    try:
+        # Ensure the persistence directory exists for logging
+        if not os.path.exists(app_config.PERSISTENCE_DIR):
+            os.makedirs(app_config.PERSISTENCE_DIR)
+
+        setup_logging(
+            level=app_config.LOG_LEVEL,
+            log_file=app_config.LOG_FILE,
+            persistence_dir=app_config.PERSISTENCE_DIR,
+        )
+    except (LoggerDirectoryError, ValueError) as e:
+        pytest.fail(f"Failed to initialize logger for tests: {e}")
+
 
 @pytest.fixture
 def valid_product_details() -> Dict[str, Any]:

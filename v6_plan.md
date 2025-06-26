@@ -62,7 +62,7 @@ This section tracks the development progress of the Crypto Trading Bot v6.
     *   [X] `mypy`: All Python files successfully pass type checks.
     *   [X] `flake8`: All Python files conform to style and quality guidelines.
     *   [X] `bandit`: Security analysis performed and findings addressed.
-    *   [X] `pytest`: All 138 unit tests across the project are passing.
+    *   [X] `pytest`: All 151 unit tests across the project are passing.
 *   **[X] Module: `logger.py`**
     *   [X] Implemented and tested.
 *   **[X] Module: `config.py`**
@@ -94,10 +94,40 @@ This section tracks the development progress of the Crypto Trading Bot v6.
 *   **[X] Final Review and Refinement**
     *   [X] Reviewed all code for adherence to NASA Power of 10 and other user-defined coding standards.
 
-## V. Project Status & Next Steps
+## V. Project Status: Post-Completion Refactoring
 
-*   **Status:** **COMPLETE.** All modules are implemented and unit tested. The test suite is stable with 138 passing tests. The core logic is considered validated and robust.
-*   **Next Steps:** The project is ready for the next phase. Choose one of the following:
+*   **Status:** **MAINTENANCE & ENHANCEMENT.** The initial development is complete. The current focus is on improving the robustness and test coverage of critical components through deep-dive refactoring and mutation testing.
+*   **[X] Test Suite Stabilization:**
+    *   [X] Resolved persistent `test_main.py` failures by correcting mock strategies for nested module imports.
+    *   [X] Addressed `test_logger.py` failures by refactoring the test class to be self-contained, removing global mocks, and using robust assertion patterns.
+    *   [X] Ensured `conftest.py` correctly initializes the logger for the `pytest` runner.
+    *   [X] Achieved a fully stable test suite with all 151 tests passing.
+
+## VI. Phase 2: Coinbase Client - Mutation Testing & Refinement
+
+This section tracks the progress of enhancing the `coinbase_client.py` module.
+
+*   **[X] Initial Test Suite Stabilization:**
+    *   [X] Analyzed and fixed all pre-existing test failures in `test_coinbase_client.py`.
+*   **[X] Malformed Response Testing:**
+    *   [X] Added robust tests for malformed API responses for all public methods (`get_accounts`, `get_product_candles`, `get_product_book`, `get_product`, `limit_order`, `get_order`, `cancel_orders`).
+*   **[X] Credential Validation Testing:**
+    *   [X] Added comprehensive tests for missing and empty API keys and secrets.
+    *   [X] Fixed a bug in `CoinbaseClient.__init__` to correctly handle empty string credentials.
+*   **[X] API Response Handling:**
+    *   [X] Added a test for invalid JSON responses from the API.
+    *   [X] Refactored `_handle_api_response` to correctly parse JSON and log decoding errors.
+*   **[ ] Mutation Testing:**
+    *   [ ] **Goal:** Achieve 100% mutation test coverage for `coinbase_client.py`.
+    *   [X] Initial mutation run performed.
+    *   [X] Cache cleared and process restarted to ensure clean state.
+    *   [ ] Address all surviving mutants systematically.
+*   **[ ] Final Code Coverage Check:**
+    *   [ ] Run a final code coverage report to ensure all new logic is tested.
+
+## VII. Next Steps
+
+*   **Current Focus:** Continue addressing the surviving mutants in `coinbase_client.py` until 100% coverage is achieved.
     1.  **Implement New Features:** Enhance the bot with new strategies or indicators.
     2.  **Further Refactoring:** Pursue performance optimizations or other code improvements.
     3.  **Deployment:** Prepare the bot for a live production environment.
