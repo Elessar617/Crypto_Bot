@@ -6,26 +6,13 @@ from unittest import mock
 import importlib
 import sys
 
-MODULE_NAME = "config"
-# Determine project root assuming tests are in a subdirectory like 'tests'
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODULE_NAME = "trading.config"
 
 
 class TestConfig(unittest.TestCase):
     """Test suite for configuration loading and validation."""
 
-    @classmethod
-    def setUpClass(cls):
-        """Set up project root for module imports if necessary."""
-        cls.original_sys_path = list(sys.path)
-        cls.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if cls.project_root not in sys.path:
-            sys.path.insert(0, cls.project_root)
 
-    @classmethod
-    def tearDownClass(cls):
-        """Restore original sys.path."""
-        sys.path = cls.original_sys_path
 
     def setUp(self):
         """Set up a clean environment for testing the config module."""

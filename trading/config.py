@@ -35,7 +35,7 @@ LOG_FILE: Final[str] = "v6_trading_bot.log"  # Log file name
 # --- File System Paths ---
 # Define the absolute path for the project's root directory.
 # This ensures that file paths are consistent regardless of the script's execution location.
-PROJECT_ROOT: Final[str] = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT: Final[str] = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Define and create the directory for storing persistence files (e.g., trade states).
 # Using an absolute path prevents ambiguity with the current working directory.

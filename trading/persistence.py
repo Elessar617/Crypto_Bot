@@ -5,11 +5,8 @@ import os
 from typing import Dict, Any, Optional
 
 # Use centralized config and logger
-from config import PERSISTENCE_DIR
-from logger import get_logger
-
-# Initialize logger for this module
-logger = get_logger()
+from trading.config import PERSISTENCE_DIR
+from trading.logger import get_logger
 
 
 def save_trade_state(asset_id: str, state_data: Dict[str, Any]) -> None:
@@ -25,6 +22,7 @@ def save_trade_state(asset_id: str, state_data: Dict[str, Any]) -> None:
         IOError: If there is an error writing to the file.
         TypeError: If asset_id is not a string or state_data is not a dict.
     """
+    logger = get_logger()
     assert (
         isinstance(asset_id, str) and len(asset_id) > 0
     ), "asset_id must be a non-empty string."
@@ -73,6 +71,7 @@ def load_trade_state(asset_id: str) -> Dict[str, Any]:
     Raises:
         TypeError: If asset_id is not a string.
     """
+    logger = get_logger()
     assert isinstance(asset_id, str), "asset_id must be a string."
     assert len(asset_id) > 0, "asset_id cannot be empty."
 
@@ -301,6 +300,7 @@ def add_sell_order_to_filled_trade(
         TypeError: If arguments are of incorrect types.
         ValueError: If filled_buy_trade does not exist or sell_order_id is missing.
     """
+    logger = get_logger()
     assert (
         isinstance(asset_id, str) and len(asset_id) > 0
     ), "asset_id must be a non-empty string."
@@ -364,6 +364,7 @@ def update_sell_order_status_in_filled_trade(
         TypeError: If arguments are of incorrect types.
         ValueError: If filled_buy_trade does not exist.
     """
+    logger = get_logger()
     assert (
         isinstance(asset_id, str) and len(asset_id) > 0
     ), "asset_id must be a non-empty string."

@@ -8,9 +8,6 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-# Ensure the project root is in the system path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from trading.signal_analyzer import should_buy_asset  # noqa: E402
 
 

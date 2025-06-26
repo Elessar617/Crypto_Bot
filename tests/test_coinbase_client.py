@@ -7,13 +7,8 @@ from unittest.mock import patch, MagicMock
 import uuid
 from requests.exceptions import HTTPError, RequestException
 
-# Add the project root to sys.path
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
 # Now that the path is set, we can import the class to be tested
-from coinbase_client import CoinbaseClient  # noqa: E402
+from trading.coinbase_client import CoinbaseClient  # noqa: E402
 
 
 class TestCoinbaseClient(unittest.TestCase):
@@ -21,9 +16,9 @@ class TestCoinbaseClient(unittest.TestCase):
 
     def setUp(self):
         """Set up test environment for each test."""
-        patcher_rest_client = patch("coinbase_client.RESTClient")
-        patcher_config = patch("coinbase_client.config")
-        patcher_logger = patch("coinbase_client.logger")
+        patcher_rest_client = patch("trading.coinbase_client.RESTClient")
+        patcher_config = patch("trading.coinbase_client.config")
+        patcher_logger = patch("trading.coinbase_client.logger")
 
         self.mock_rest_client_class = patcher_rest_client.start()
         self.mock_config_module = patcher_config.start()
@@ -523,7 +518,7 @@ class TestCoinbaseClient(unittest.TestCase):
         self._test_api_call_unexpected_error(
             "get_product",
             api_args,
-            "Assertion failed in get_product for BTC-USD: Chaos",
+            "An unexpected error occurred in get_product for BTC-USD: Chaos",
         )
 
     def test_limit_order_no_client(self):
@@ -770,7 +765,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in cancel_orders for []: 'order_ids' must be a non-empty list.",
+            "Assertion failed in cancel_orders for []: order_ids must be a non-empty list.",
             exc_info=True,
         )
 

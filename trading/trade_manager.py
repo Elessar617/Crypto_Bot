@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, Optional
 from decimal import Decimal
 
-from coinbase_client import CoinbaseClient
+from trading.coinbase_client import CoinbaseClient
 
 
 class TradeManager:

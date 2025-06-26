@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 import pandas as pd
 
-from coinbase_client import CoinbaseClient
+from trading.coinbase_client import CoinbaseClient
 from trading.trade_manager import TradeManager
 
 
@@ -85,7 +85,7 @@ class TestTradeManager(unittest.TestCase):
             Decimal("0.001"),
             Decimal("100.00"),
         )
-        self.mock_client.limit_order.return_value = {
+        self.mock_client.limit_order_buy.return_value = {
             "success": True,
             "order_id": "order-123",
         }
@@ -94,8 +94,7 @@ class TestTradeManager(unittest.TestCase):
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
 
         # Assert
-        self.mock_client.limit_order.assert_called_once_with(
-            side="BUY",
+        self.mock_client.limit_order_buy.assert_called_once_with(
             client_order_id=unittest.mock.ANY,
             product_id="BTC-USD",
             base_size="0.001",
@@ -118,7 +117,7 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
 
-        self.mock_client.limit_order.assert_not_called()
+        self.mock_client.limit_order_buy.assert_not_called()
         self.mock_persistence.save_open_buy_order.assert_not_called()
 
     def test_handle_open_buy_order_is_filled(self):
@@ -183,7 +182,7 @@ class TestTradeManager(unittest.TestCase):
         self.mock_config.TRADING_PAIRS["BTC-USD"]["sell_profit_tiers"] = [
             {"profit_target": 0.02, "quantity_percentage": 1.0}
         ]
-        self.mock_client.limit_order.return_value = {
+        self.mock_client.limit_order_sell.return_value = {
             "success": True,
             "order_id": "sell-456",
         }
@@ -195,8 +194,7 @@ class TestTradeManager(unittest.TestCase):
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
 
         # Assert
-        self.mock_client.limit_order.assert_called_once_with(
-            side="SELL",
+        self.mock_client.limit_order_sell.assert_called_once_with(
             product_id="BTC-USD",
             base_size="1.0",
             limit_price="102.00",

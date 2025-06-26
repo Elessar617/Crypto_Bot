@@ -7,11 +7,9 @@ from typing import Optional
 import pandas as pd  # type: ignore[import]
 import ta  # type: ignore[import] # ta library might not have type stubs
 
-from logger import (
+from trading.logger import (
     get_logger,
 )  # Assuming logger.py is in the same directory or PYTHONPATH
-
-logger = get_logger()
 
 
 def _validate_candles_df(candles_df: pd.DataFrame, indicator_name: str) -> bool:
@@ -25,6 +23,7 @@ def _validate_candles_df(candles_df: pd.DataFrame, indicator_name: str) -> bool:
     Returns:
         True if the DataFrame is valid, False otherwise.
     """
+    logger = get_logger()
     if not isinstance(candles_df, pd.DataFrame):
         logger.warning(f"Input for {indicator_name} is not a DataFrame.")
         return False
@@ -60,6 +59,7 @@ def calculate_rsi(candles_df: pd.DataFrame, period: int = 14) -> Optional[pd.Ser
         A pandas Series containing the RSI values, or None if calculation fails
         (e.g., insufficient data, missing 'close' column).
     """
+    logger = get_logger()
     # Rule: Use a minimum of two runtime assertions per function.
     assert isinstance(
         candles_df, pd.DataFrame
@@ -126,6 +126,7 @@ def calculate_sma(candles_df: pd.DataFrame, period: int = 20) -> Optional[pd.Ser
         A pandas Series containing the SMA values, or None if calculation fails
         (e.g., insufficient data, missing 'close' column).
     """
+    logger = get_logger()
     # Rule: Use a minimum of two runtime assertions per function.
     assert isinstance(
         candles_df, pd.DataFrame

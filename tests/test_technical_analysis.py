@@ -8,21 +8,10 @@ import pandas as pd
 import numpy as np
 import ta  # type: ignore
 
-# Add project root to sys.path to allow direct import of modules
 import sys
 import os
 
-# --- Mock config before other project imports ---
-mock_config_module = MagicMock()
-mock_config_module.LOG_LEVEL = "DEBUG"
-mock_config_module.LOG_FILE = "test_technical_analysis.log"
-mock_config_module.PERSISTENCE_DIR = "test_data/test_persistence_ta"
-sys.modules["config"] = mock_config_module
-# --- End Mock config ---
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-from technical_analysis import (  # noqa: E402
+from trading.technical_analysis import (
     calculate_rsi,
     calculate_sma,
 )
@@ -33,18 +22,19 @@ class TestTechnicalAnalysis(unittest.TestCase):
     Test suite for technical analysis functions.
     """
 
-    logger_patcher: unittest.mock._patch
+    get_logger_patcher: unittest.mock._patch
 
     @classmethod
     def setUpClass(cls) -> None:
         """Set up class-level resources, primarily mocks."""
-        cls.logger_patcher = patch("technical_analysis.logger", new_callable=MagicMock)
+        cls.get_logger_patcher = patch("trading.technical_analysis.get_logger")
 
     def setUp(self) -> None:
         """Reset mocks before each test and start the logger patcher."""
-        self.mock_logger_instance = self.logger_patcher.start()
-        self.addCleanup(self.logger_patcher.stop)
-        self.mock_logger_instance.reset_mock()
+        mock_get_logger = self.get_logger_patcher.start()
+        self.mock_logger_instance = MagicMock()
+        mock_get_logger.return_value = self.mock_logger_instance
+        self.addCleanup(self.get_logger_patcher.stop)
 
     # --- Test cases for calculate_rsi ---
 
@@ -262,7 +252,7 @@ class TestTechnicalAnalysis(unittest.TestCase):
         else:
             self.fail("result_rsi_series should not be None.")
 
-    @patch("technical_analysis.ta.momentum.RSIIndicator")
+    @patch("trading.technical_analysis.ta.momentum.RSIIndicator")
     def test_calculate_rsi_generic_exception(
         self, MockRSIIndicatorClass: MagicMock
     ) -> None:
@@ -444,7 +434,7 @@ class TestTechnicalAnalysis(unittest.TestCase):
         else:
             self.fail("result_sma_series became None after assertIsNotNone check.")
 
-    @patch("technical_analysis.ta.trend.SMAIndicator")
+    @patch("trading.technical_analysis.ta.trend.SMAIndicator")
     def test_calculate_sma_generic_exception(
         self, MockSMAIndicatorClass: MagicMock
     ) -> None:

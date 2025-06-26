@@ -15,8 +15,8 @@ import tempfile
 # Determine the actual logger module name (e.g., 'logger' if logger.py is in the same dir or PYTHONPATH)
 # Assuming logger.py is in the parent directory of tests, or accessible via PYTHONPATH
 # For this project structure, it's likely 'logger'
-LOGGER_MODULE_NAME = "logger"  # The actual name of the logger module as Python knows it
-CONFIG_MODULE_NAME = "config"  # The actual name of the config module
+LOGGER_MODULE_NAME = "trading.logger"  # The actual name of the logger module as Python knows it
+CONFIG_MODULE_NAME = "trading.config"  # The actual name of the config module
 
 # Try to import the actual logger and config modules to get their spec for MagicMock
 # This helps create more accurate mocks.
@@ -40,8 +40,8 @@ class TestLogger(unittest.TestCase):
         """Set up a clean environment for each logger test."""
         # Save original modules to restore them later. This is critical for isolation.
         self.original_modules = {
-            "config": sys.modules.pop("config", None),
-            "logger": sys.modules.pop("logger", None),
+            "trading.config": sys.modules.pop("trading.config", None),
+            "trading.logger": sys.modules.pop("trading.logger", None),
         }
         self.addCleanup(self._restore_modules)
 
@@ -54,7 +54,7 @@ class TestLogger(unittest.TestCase):
         self.mock_config.PERSISTENCE_DIR = self.test_dir
         self.mock_config.LOG_FILE = "test_app.log"
         self.mock_config.LOG_LEVEL = "DEBUG"
-        sys.modules["config"] = self.mock_config
+        sys.modules["trading.config"] = self.mock_config
 
         # Import a fresh copy of the logger for each test
         self.logger_module = importlib.import_module(LOGGER_MODULE_NAME)

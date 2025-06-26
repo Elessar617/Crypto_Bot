@@ -219,3 +219,110 @@ Low code coverage is often a symptom of code that is difficult to test. Instead 
     *   **Solution:**
         *   [ ] Refactor `logger.py` to make its configuration explicit and repeatable, likely via a `setup_logging()` function.
         *   [ ] This will simplify the tests, eliminate the need for complex `sys.modules` manipulation, and resolve the outstanding test failures as a direct result of improved design.
+
+## VIII. Senior SWE Project Audit & Refactor Roadmap
+
+### 1. Current Structure Analysis
+
+Your current project has code split between `trading/` (a package) and the root directory, with an extensive `tests/` suite. This structure leads to import confusion, frequent test breakages after refactor, and constant “fixing” without forward progress.
+
+### 2. Main Problems Identified
+
+- **Split Codebase:**  
+  Core logic is divided between the `trading/` package and the project root.  
+- **Import Hell:**  
+  Refactoring breaks imports, leading to endless `ModuleNotFoundError` issues.
+- **Mixed Import Styles:**  
+  Using both absolute and relative imports causes failures when running as a script vs. as a package.
+- **Testing and Static Checks Fail:**  
+  Tools like pytest and mypy expect a consistent package structure.
+
+---
+
+### 3. The Refactor Plan
+
+#### Step 1: Consolidate All Code into One Package
+
+- Move all `.py` files for your core logic into `trading/`.
+- Leave only entry points (like `main.py`), configuration, and documentation in the project root.
+
+**Example:**
+```
+v6/
+  trading/
+    __init__.py
+    coinbase_client.py
+    config.py
+    logger.py
+    order_calculator.py
+    persistence.py
+    signal_analyzer.py
+    technical_analysis.py
+    trade_manager.py
+    (other modules)
+  tests/
+    (test_*.py files)
+  main.py
+  requirements.txt
+  README.md
+  ...
+```
+
+---
+
+#### Step 2: Fix All Imports
+
+- Use **only absolute imports** within your code and tests.  
+  **Example:**  
+  `from trading.coinbase_client import CoinbaseClient`
+- Never use relative imports (`from .foo import bar`).
+
+---
+
+#### Step 3: Run Everything From the Project Root
+
+- To run the bot:  
+  ```bash
+  python -m trading.main
+  ```
+- To run tests:  
+  ```bash
+  pytest
+  ```
+
+---
+
+#### Step 4: Maintain Consistency
+
+- New modules go in `trading/`, not in the root.
+- Entry point (`main.py`) just launches the bot, all business logic stays in the package.
+- Fix imports **everywhere** as you move modules.
+
+---
+
+#### Step 5: Version Control Your Changes
+
+- Use git for every structural change.
+- Commit small, logical steps so you can always revert if something breaks.
+
+---
+
+### 4. Why This Will “Just Work”
+
+- **Eliminates Import Confusion:**  
+  Tests and bot code all point to a single source of logic.
+- **pytest, mypy, flake8** will work reliably.
+- **Fewer places to break:**  
+  All logic in one package, consistent import style, single point of entry.
+
+---
+
+### 5. Summary Checklist & Progress
+
+- **Step 1: Consolidate Code:** [X] All logic moved to `trading/`.
+- **Step 2: Update Imports:** [X] All application and test imports updated to be absolute (`from trading...`).
+- **Step 3: Commit Changes:** [ ] **CURRENT STEP:** Commit the refactoring work to version control.
+- **Step 4: Verify with Tests:** [ ] Run the full `pytest` suite to ensure no regressions.
+- **Step 5: Final Review:** [ ] Run static analysis tools (`mypy`, `flake8`, `bandit`).
+
+---

@@ -7,22 +7,11 @@ import os
 import json
 from unittest.mock import patch, mock_open
 
-# Adjust the path to import persistence from the parent directory
-import sys
+from trading import persistence
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PARENT_DIR = os.path.dirname(SCRIPT_DIR)
-MODULE_DIR = os.path.join(PARENT_DIR, "v6")  # Assuming v6 is where persistence.py is
-if MODULE_DIR not in sys.path:
-    sys.path.append(MODULE_DIR)
-
-import persistence
-
-# Define a consistent DATA_DIR for tests, mirroring persistence.py logic
-# This should point to a temporary or test-specific data directory if real
-# file ops are tested, but since we mock, it's more about consistency
-# with the module's internal path construction.
-TEST_PERSISTENCE_DIR = os.path.join(MODULE_DIR, "data")
+# Define a consistent DATA_DIR for tests. Since all file operations are mocked,
+# this is primarily for ensuring the mock paths are consistent.
+TEST_PERSISTENCE_DIR = "tests/mock_data"
 
 
 class TestPersistence(unittest.TestCase):
@@ -34,14 +23,14 @@ class TestPersistence(unittest.TestCase):
         self.assertIsNotNone(persistence, "Persistence module failed to load.")
         # This path is used by the persistence module internally. We mock its behavior.
         self.persistence_dir_patch = patch(
-            "persistence.PERSISTENCE_DIR", TEST_PERSISTENCE_DIR
+            "trading.persistence.PERSISTENCE_DIR", TEST_PERSISTENCE_DIR
         )
         self.mock_persistence_dir = self.persistence_dir_patch.start()
         self.addCleanup(self.persistence_dir_patch.stop)
 
-    @patch("persistence.os.makedirs")
-    @patch("persistence.open", new_callable=mock_open)
-    @patch("persistence.json.dump")
+    @patch("trading.persistence.os.makedirs")
+    @patch("trading.persistence.open", new_callable=mock_open)
+    @patch("trading.persistence.json.dump")
     def test_save_trade_state_success(
         self, mock_json_dump, mock_file_open, mock_os_makedirs
     ):
@@ -60,9 +49,9 @@ class TestPersistence(unittest.TestCase):
         )
         mock_json_dump.assert_called_once_with(state_data, mock_file_open(), indent=4)
 
-    @patch("persistence.os.makedirs")
-    @patch("persistence.open", new_callable=mock_open)
-    @patch("persistence.json.dump")
+    @patch("trading.persistence.os.makedirs")
+    @patch("trading.persistence.open", new_callable=mock_open)
+    @patch("trading.persistence.json.dump")
     def test_save_trade_state_creates_dir(
         self, mock_json_dump, mock_file_open, mock_os_makedirs
     ):
@@ -81,9 +70,9 @@ class TestPersistence(unittest.TestCase):
         )
         mock_json_dump.assert_called_once_with(state_data, mock_file_open(), indent=4)
 
-    @patch("persistence.os.path.exists")
-    @patch("persistence.open", new_callable=mock_open, read_data='{"key": "value"}')
-    @patch("persistence.json.load")
+    @patch("trading.persistence.os.path.exists")
+    @patch("trading.persistence.open", new_callable=mock_open, read_data='{"key": "value"}')
+    @patch("trading.persistence.json.load")
     def test_load_trade_state_success(
         self, mock_json_load, mock_file_open, mock_os_exists
     ):
@@ -119,9 +108,9 @@ class TestPersistence(unittest.TestCase):
         mock_os_exists.assert_called_once_with(expected_file_path)
         self.assertEqual(loaded_data, {})
 
-    @patch("persistence.os.path.exists")
-    @patch("persistence.open", new_callable=mock_open, read_data="this is not json")
-    @patch("persistence.json.load", side_effect=json.JSONDecodeError("Error", "doc", 0))
+    @patch("trading.persistence.os.path.exists")
+    @patch("trading.persistence.open", new_callable=mock_open, read_data="invalid json")
+    @patch("trading.persistence.json.load", side_effect=json.JSONDecodeError("Error", "doc", 0))
     def test_load_trade_state_json_decode_error(
         self, mock_json_load, mock_file_open, mock_os_exists
     ):
@@ -166,8 +155,8 @@ class TestPersistence(unittest.TestCase):
 
     # --- Tests for open_buy_order helper functions ---
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_save_open_buy_order(self, mock_load_trade_state, mock_save_trade_state):
         """Test save_open_buy_order correctly structures and saves data."""
         asset_id = "BTC-USD"
@@ -229,8 +218,8 @@ class TestPersistence(unittest.TestCase):
         mock_load_trade_state.return_value = {"open_buy_order": {"order_id": "123"}}
         self.assertIsNone(persistence.load_open_buy_order(asset_id))
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_clear_open_buy_order_exists(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -248,8 +237,8 @@ class TestPersistence(unittest.TestCase):
         expected_saved_state = {"other_data": "remains"}
         mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_clear_open_buy_order_not_exists(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -265,8 +254,8 @@ class TestPersistence(unittest.TestCase):
 
     # --- Tests for filled_buy_trade helper functions ---
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_save_filled_buy_trade(self, mock_load_trade_state, mock_save_trade_state):
         """Test save_filled_buy_trade correctly structures and saves data."""
         asset_id = "DOT-USD"
@@ -329,8 +318,8 @@ class TestPersistence(unittest.TestCase):
         mock_load_trade_state.return_value = {"filled_buy_trade": {"price": "100"}}
         self.assertIsNone(persistence.load_filled_buy_trade(asset_id))
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_clear_filled_buy_trade_exists(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -348,8 +337,8 @@ class TestPersistence(unittest.TestCase):
         expected_saved_state = {"other_info": "test"}
         mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_clear_filled_buy_trade_not_exists(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -365,8 +354,8 @@ class TestPersistence(unittest.TestCase):
 
     # --- Tests for associated_sell_orders helper functions ---
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_add_sell_order_to_filled_trade_success(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -399,8 +388,8 @@ class TestPersistence(unittest.TestCase):
             asset_id, {"filled_buy_trade": expected_filled_trade}
         )
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_add_sell_order_creates_list_if_not_exists(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -441,8 +430,8 @@ class TestPersistence(unittest.TestCase):
                 asset_id, "sell112", {"order_id": "sell112"}
             )
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_add_sell_order_duplicate_not_added(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -473,8 +462,8 @@ class TestPersistence(unittest.TestCase):
 
         mock_save_trade_state.assert_not_called()  # Not saved if duplicate
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_update_sell_order_status_success(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -523,8 +512,8 @@ class TestPersistence(unittest.TestCase):
                 asset_id, "anyID", "FILLED"
             )
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_update_sell_order_status_no_sell_orders_list(
         self, mock_load_trade_state, mock_save_trade_state
     ):
@@ -540,8 +529,8 @@ class TestPersistence(unittest.TestCase):
         self.assertFalse(result)
         mock_save_trade_state.assert_not_called()
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.save_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_update_sell_order_status_order_not_found(
         self, mock_load_trade_state, mock_save_trade_state
     ):

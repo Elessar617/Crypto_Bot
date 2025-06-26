@@ -10,8 +10,8 @@ import os
 from typing import Dict, Any
 
 # Added imports for logger setup
-from logger import setup_logging, LoggerDirectoryError
-import config as app_config  # Use alias to avoid pytest 'config' fixture conflict
+from trading.logger import setup_logging, LoggerDirectoryError
+from trading import config as app_config  # Use alias to avoid pytest 'config' fixture conflict
 
 
 def pytest_configure(config):

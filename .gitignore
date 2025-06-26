@@ -48,6 +48,16 @@ ENV/
 .idea/
 .vscode/
 *.swp
+
+# Reports and Artifacts
+*_report.txt
+*.log
+
+# Testing
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
 *.swo
 .spyderproject
 .spyproject

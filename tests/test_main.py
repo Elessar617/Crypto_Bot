@@ -5,11 +5,8 @@ import sys
 import unittest
 from unittest.mock import patch, MagicMock, call
 
-# Ensure the project root is in the system path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 # Import the module to be tested
-import main  # noqa: E402
+import trading.main  # noqa: E402
 
 
 class TestMainModule(unittest.TestCase):
@@ -34,19 +31,18 @@ class TestMainModule(unittest.TestCase):
         mock_trading_pkg.TradeManager = mock_tm_class
 
         mock_modules = {
-            "coinbase_client": mock_cc_module,
-            "persistence": mock_p_module,
-            "technical_analysis": mock_ta_module,
-            "trading": mock_trading_pkg,
+            "trading.coinbase_client": mock_cc_module,
+            "trading.persistence": mock_p_module,
+            "trading.technical_analysis": mock_ta_module,
             "trading.signal_analyzer": mock_sa_module,
             "trading.order_calculator": mock_oc_module,
             "trading.trade_manager": MagicMock(TradeManager=mock_tm_class),
         }
 
         with patch.dict("sys.modules", mock_modules), patch(
-            "main.config"
-        ) as mock_config, patch("main.get_logger") as mock_get_logger, patch(
-            "main.sys.exit"
+            "trading.main.config"
+        ) as mock_config, patch("trading.main.get_logger") as mock_get_logger, patch(
+            "trading.main.sys.exit"
         ) as mock_sys_exit:
             # --- Setup Mocks ---
             mock_config.LOG_LEVEL = "DEBUG"
@@ -107,12 +103,12 @@ class TestMainModule(unittest.TestCase):
         error_message = "Invalid API keys"
         mock_cc_module.CoinbaseClient.side_effect = RuntimeError(error_message)
 
-        mock_modules = {"coinbase_client": mock_cc_module}
+        mock_modules = {"trading.coinbase_client": mock_cc_module}
 
         with patch.dict("sys.modules", mock_modules), patch(
-            "main.get_logger"
-        ) as mock_get_logger, patch("main.sys.exit") as mock_sys_exit, patch(
-            "main.config"
+            "trading.main.get_logger"
+        ) as mock_get_logger, patch("trading.main.sys.exit") as mock_sys_exit, patch(
+            "trading.main.config"
         ) as mock_config:
             mock_config.LOG_LEVEL = "DEBUG"
 
@@ -137,18 +133,18 @@ class TestMainModule(unittest.TestCase):
         mock_ta_module = MagicMock()
 
         mock_modules = {
-            "coinbase_client": mock_cc_module,
+            "trading.coinbase_client": mock_cc_module,
             "trading.trade_manager": mock_tm_module,
-            "persistence": mock_p_module,
+            "trading.persistence": mock_p_module,
             "trading.signal_analyzer": mock_sa_module,
             "trading.order_calculator": mock_oc_module,
-            "technical_analysis": mock_ta_module,
+            "trading.technical_analysis": mock_ta_module,
         }
 
         with patch.dict("sys.modules", mock_modules), patch(
-            "main.config"
-        ) as mock_config, patch("main.get_logger") as mock_get_logger, patch(
-            "main.sys.exit"
+            "trading.main.config"
+        ) as mock_config, patch("trading.main.get_logger") as mock_get_logger, patch(
+            "trading.main.sys.exit"
         ) as mock_sys_exit:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger

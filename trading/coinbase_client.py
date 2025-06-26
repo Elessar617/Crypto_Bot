@@ -10,9 +10,8 @@ from requests.exceptions import HTTPError, RequestException
 
 from coinbase.rest import RESTClient
 
-import config
-import logger
-import time
+from trading import config
+from trading import logger
 
 
 class CoinbaseClient:
