@@ -142,7 +142,7 @@ class TestTradeManager(unittest.TestCase):
             "order_id": "order-123",
             "status": "FILLED",
             "filled_size": "0.1",
-            "average_fill_price": "99.98",
+            "average_filled_price": "99.98",
             "created_time": time.time(),
         }
         mock_order.get.side_effect = lambda key, default=None: order_data.get(

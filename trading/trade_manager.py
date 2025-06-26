@@ -279,54 +279,53 @@ class TradeManager:
         product_details: Dict[str, Any],
     ) -> None:
         """Checks the status of an open buy order and handles it accordingly."""
-        order_id = open_buy_order.get("order_id")
-        if not order_id:
-            self.logger.error(
-                f"[{asset_id}] 'order_id' missing from open_buy_order state. "
-                "Clearing."
-            )
-            self.persistence_manager.clear_open_buy_order(asset_id)
-            return
-
+        order_id = open_buy_order["order_id"]
         self.logger.info(f"[{asset_id}] Checking status of open buy order {order_id}.")
-        try:
-            order_details = self.client.get_order(order_id)
 
-            if not order_details:
-                self.logger.error(
-                    f"[{asset_id}] Failed to fetch details for order {order_id}."
-                )
+        try:
+            order_status = self.client.get_order(order_id)
+
+            if not order_status:
+                self.logger.error(f"[{asset_id}] Could not get status for order {order_id}.")
                 return
 
-            order_status = order_details.get("status")
-
-            if order_status == "FILLED":
-                filled_size_str = order_details.get("filled_size")
-                avg_price_str = order_details.get("average_fill_price")
-                created_at = order_details.get("created_time")
-
-                if not all([filled_size_str, avg_price_str, created_at]):
-                    self.logger.error(
-                        f"[{asset_id}] Filled order {order_id} is missing critical "
-                        "data."
-                    )
-                    return
-
+            status = order_status.get("status")
+            if status == "FILLED":
                 self.logger.info(f"[{asset_id}] Buy order {order_id} is filled.")
-                self.persistence_manager.save_filled_buy_trade(asset_id, order_details)
+                filled_size = Decimal(order_status.get("filled_size", "0"))
+                avg_price = Decimal(order_status.get("average_filled_price", "0"))
+
+                if filled_size > 0 and avg_price > 0:
+                    trade_data = {
+                        "buy_order_id": order_id,
+                        "timestamp": time.time(),
+                        "size": str(filled_size),
+                        "price": str(avg_price),
+                        "sell_orders": [],
+                    }
+                    self.persistence_manager.save_filled_buy_trade(asset_id, trade_data)
+                    self.persistence_manager.clear_open_buy_order(asset_id)
+                    self.logger.info(
+                        f"[{asset_id}] Saved filled trade data and cleared open buy order."
+                    )
+                else:
+                    self.logger.error(
+                        f"[{asset_id}] Order {order_id} filled but size/price is zero."
+                    )
+                    self.persistence_manager.clear_open_buy_order(asset_id)
+
+            elif status == "CANCELLED":
+                self.logger.info(f"[{asset_id}] Buy order {order_id} was cancelled.")
                 self.persistence_manager.clear_open_buy_order(asset_id)
 
-            elif order_status in ["CANCELLED", "EXPIRED", "FAILED"]:
+            elif status == "OPEN":
+                self.logger.info(f"[{asset_id}] Buy order {order_id} is still open.")
+                # Optional: Add logic for order timeout and cancellation here
+                # For now, we just leave it open.
+
+            else:
                 self.logger.warning(
-                    f"[{asset_id}] Buy order {order_id} is {order_status}. "
-                    "Removing from state."
-                )
-                self.persistence_manager.clear_open_buy_order(asset_id)
-
-            else:  # OPEN, PENDING, etc.
-                self.logger.info(
-                    f"[{asset_id}] Buy order {order_id} is still {order_status}. "
-                    "Waiting."
+                    f"[{asset_id}] Unhandled order status '{status}' for order {order_id}."
                 )
 
         except Exception as e:
@@ -335,50 +334,57 @@ class TradeManager:
                 exc_info=True,
             )
 
-    def _handle_new_buy_order(
-        self,
-        asset_id: str,
-        product_details: Dict[str, Any],
-        config_asset_params: Dict[str, Any],
-    ) -> None:
-        """Handles the logic for creating a new buy order."""
-        self.logger.info(f"[{asset_id}] Checking for new buy opportunities.")
-
+    def _analyze_market_for_buy_signal(
+        self, asset_id: str, config_asset_params: Dict[str, Any]
+    ) -> Optional[list]:
+        """
+        Fetches market data, calculates indicators, and checks for a buy signal.
+        Returns candle data if a buy signal is present, otherwise None.
+        """
         try:
-            # 1. Get candle data
             candles = self.client.get_product_candles(
                 asset_id, granularity=config_asset_params["candle_granularity_api_name"]
             )
             if not candles:
                 self.logger.warning(f"[{asset_id}] No candle data returned.")
-                return
+                return None
 
-            # Convert to DataFrame for technical analysis
             candles_df = pd.DataFrame(candles)
-
-            # Ensure correct data types for technical analysis
             for col in ["open", "high", "low", "close", "volume"]:
                 if col in candles_df.columns:
                     candles_df[col] = pd.to_numeric(candles_df[col])
 
-            # 2. Calculate indicator (RSI)
             rsi_series = self.ta_module.calculate_rsi(
                 candles_df, period=config_asset_params["rsi_period"]
             )
             if rsi_series is None or rsi_series.empty:
                 self.logger.warning(f"[{asset_id}] RSI calculation failed.")
-                return
+                return None
 
-            # 3. Check buy condition
-            if not self.signal_analyzer.should_buy_asset(
+            if self.signal_analyzer.should_buy_asset(
                 rsi_series, config_asset_params, self.logger
             ):
-                self.logger.info(f"[{asset_id}] Buy conditions not met.")
-                return
+                self.logger.info(f"[{asset_id}] Buy signal detected.")
+                return candles
 
-            self.logger.info(f"[{asset_id}] Buy signal detected. Placing order.")
+            self.logger.info(f"[{asset_id}] Buy conditions not met.")
+            return None
+        except Exception as e:
+            self.logger.error(
+                f"[{asset_id}] Exception in _analyze_market_for_buy_signal: {e}",
+                exc_info=True,
+            )
+            return None
 
-            # 4. Calculate order price and size
+    def _execute_buy_order(
+        self,
+        asset_id: str,
+        product_details: Dict[str, Any],
+        config_asset_params: Dict[str, Any],
+        candles: list,
+    ) -> None:
+        """Calculates order details and places a new buy order."""
+        try:
             buy_details = self.order_calculator.calculate_buy_order_details(
                 buy_amount_usd=Decimal(str(config_asset_params["buy_amount_usd"])),
                 last_close_price=Decimal(str(candles[-1]["close"])),
@@ -388,13 +394,11 @@ class TradeManager:
 
             if not buy_details:
                 self.logger.warning(
-                    f"[{asset_id}] Could not calculate buy order details. " "Skipping."
+                    f"[{asset_id}] Could not calculate buy order details. Skipping."
                 )
                 return
 
             size, limit_price = buy_details
-
-            # 5. Place the buy order
             client_order_id = self.client._generate_client_order_id()
             order_result = self.client.limit_order_buy(
                 product_id=asset_id,
@@ -409,25 +413,36 @@ class TradeManager:
                     self.logger.info(
                         f"[{asset_id}] Successfully placed buy order {order_id}."
                     )
-                    # Save the open order state
                     open_order_data = {
                         "order_id": order_id,
                         "timestamp": time.time(),
                         "size": str(size),
                         "price": str(limit_price),
                     }
-                    self.persistence_manager.save_open_buy_order(
-                        asset_id, open_order_data
-                    )
+                    self.persistence_manager.save_open_buy_order(asset_id, open_order_data)
             elif order_result:
                 error_response = order_result.get("error_response", {})
                 error_message = error_response.get("message", "No message")
                 self.logger.error(
-                    f"[{asset_id}] Failed to place buy order. "
-                    f"Reason: {error_message}"
+                    f"[{asset_id}] Failed to place buy order. Reason: {error_message}"
                 )
-
         except Exception as e:
             self.logger.error(
-                f"[{asset_id}] Exception in _handle_new_buy_order: {e}", exc_info=True
+                f"[{asset_id}] Exception in _execute_buy_order: {e}", exc_info=True
+            )
+
+    def _handle_new_buy_order(
+        self,
+        asset_id: str,
+        product_details: Dict[str, Any],
+        config_asset_params: Dict[str, Any],
+    ) -> None:
+        """Handles the logic for creating a new buy order."""
+        self.logger.info(f"[{asset_id}] Checking for new buy opportunities.")
+
+        candles = self._analyze_market_for_buy_signal(asset_id, config_asset_params)
+
+        if candles:
+            self._execute_buy_order(
+                asset_id, product_details, config_asset_params, candles
             )
