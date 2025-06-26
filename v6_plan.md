@@ -106,8 +106,8 @@ Your current project has code split between `trading/` (a package) and the root 
 This section tracks the final steps to ensure the codebase is stable, clean, and fully verified after the major refactoring effort.
 
 *   **[X] Fix All Failing Tests:** Addressed all test failures in `tests/test_coinbase_client.py` and `tests/test_main.py`. All 131 tests are now passing.
-*   **[ ] Run Static Analysis:** Perform and fix any issues reported by `mypy`, `flake8`, and `bandit`.
-*   **[ ] Final Code Review:** A final review of the codebase for clarity, consistency, and adherence to design principles.
+*   **[X] Run Static Analysis:** Performed and fixed all issues reported by `mypy`, `flake8`, and `bandit`.
+*   **[ ] Final Code Review:** **(CURRENT STEP)** A final review of the codebase for clarity, consistency, and adherence to design principles.
 
 ### 4. Summary Checklist & Progress
 
@@ -116,8 +116,8 @@ This section tracks the final steps to ensure the codebase is stable, clean, and
 - **Step 3: Commit Changes:** [X] Commit the refactoring work to version control.
 - **Step 4: Run Bot (Smoke Test):** [X] Run the bot and validate it runs successfully in the live environment, fixing all runtime errors.
 - **Step 5: Resolve Test Setup:** [X] Add `pyproject.toml` and install in editable mode to resolve `ModuleNotFoundError` during test collection.
-- **Step 6: Verify with Tests:** [ ] **CURRENT STEP:** Run the full `pytest` suite to ensure no regressions.
-- **Step 7: Final Review:** [ ] Run static analysis tools (`mypy`, `flake8`, `bandit`).
+- **Step 6: Verify with Tests:** [X] Run the full `pytest` suite to ensure no regressions.
+- **Step 7: Final Review:** [X] Run static analysis tools (`mypy`, `flake8`, `bandit`).
 
 ---
 

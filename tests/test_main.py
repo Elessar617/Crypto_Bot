@@ -1,7 +1,7 @@
 """Unit tests for main.py module."""
 
 import unittest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, call
 
 # Import the module to be tested
 from trading import main
@@ -16,7 +16,12 @@ class TestMainModule(unittest.TestCase):
     @patch("trading.main.get_logger")
     @patch("trading.main.sys.exit")
     def test_run_bot_success(
-        self, mock_exit, mock_get_logger, mock_config, mock_trade_manager, mock_coinbase_client
+        self,
+        mock_exit,
+        mock_get_logger,
+        mock_config,
+        mock_trade_manager,
+        mock_coinbase_client,
     ):
         """Test successful execution of run_bot with multiple assets."""
         mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
@@ -72,7 +77,12 @@ class TestMainModule(unittest.TestCase):
     @patch("trading.main.get_logger")
     @patch("trading.main.sys.exit")
     def test_run_bot_asset_processing_error_continues(
-        self, mock_exit, mock_get_logger, mock_config, mock_trade_manager, mock_coinbase_client
+        self,
+        mock_exit,
+        mock_get_logger,
+        mock_config,
+        mock_trade_manager,
+        mock_coinbase_client,
     ):
         """Test that an error in one asset doesn't stop the next one."""
         mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
@@ -89,10 +99,11 @@ class TestMainModule(unittest.TestCase):
         self.assertEqual(mock_trade_manager.call_count, 1)
         self.assertEqual(mock_tm_instance.process_asset_trade_cycle.call_count, 2)
 
-        mock_logger.error.assert_called_once_with(
-            "An unexpected error occurred while processing asset BTC-USD: Test processing error",
-            exc_info=True,
+        expected_msg = (
+            "An unexpected error occurred while processing asset BTC-USD: "
+            "Test processing error"
         )
+        mock_logger.error.assert_called_once_with(expected_msg, exc_info=True)
         mock_exit.assert_not_called()
 
 

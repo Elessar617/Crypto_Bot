@@ -42,7 +42,6 @@ def run_bot() -> None:
         logger = get_logger()
         logger.info("--- Starting v6 crypto trading bot run ---")
 
-
     except (LoggerDirectoryError, ValueError) as e:
         # If logger setup fails, there's no logger. Print to stderr and exit.
         print(f"CRITICAL: Logger initialization failed: {e}", file=sys.stderr)

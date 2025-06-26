@@ -12,8 +12,6 @@ MODULE_NAME = "trading.config"
 class TestConfig(unittest.TestCase):
     """Test suite for configuration loading and validation."""
 
-
-
     def setUp(self):
         """Set up a clean environment for testing the config module."""
         self.original_environ = dict(os.environ)

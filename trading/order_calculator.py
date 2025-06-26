@@ -170,10 +170,11 @@ def determine_sell_orders_params(
         if (
             remaining_quantity < -base_increment
         ):  # Allow for small floating point inaccuracies
-            logger.error(
-                f"[{asset_id}] Negative remaining quantity ({remaining_quantity}) after "
-                f"tier {i+1}. This should not happen."
+            log_message = (
+                f"[{asset_id}] Negative remaining quantity ({remaining_quantity}) "
+                f"after tier {i+1}. This should not happen."
             )
+            logger.error(log_message)
             # This indicates a logic error, stop processing to be safe
             return []
 

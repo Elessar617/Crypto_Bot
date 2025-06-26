@@ -1,7 +1,6 @@
 """Unit tests for the CoinbaseClient class."""
 
-import os
-import sys
+
 import unittest
 from unittest.mock import patch, MagicMock
 import uuid
@@ -40,7 +39,7 @@ class TestCoinbaseClient(unittest.TestCase):
         self.mock_rest_client_instance = self.mock_rest_client_class.return_value
 
         self.mock_config_module.COINBASE_API_KEY = "test_api_key"
-        self.mock_config_module.COINBASE_API_SECRET = "test_api_secret"
+        self.mock_config_module.COINBASE_API_SECRET = "test_api_secret"  # nosec
 
         # Common HTTP/Request exception mocks
         mock_response = MagicMock()
@@ -81,7 +80,7 @@ class TestCoinbaseClient(unittest.TestCase):
         # The client is already initialized in setUp.
         self.mock_rest_client_class.assert_called_once_with(
             api_key="test_api_key",
-            api_secret="test_api_secret",
+            api_secret="test_api_secret",  # nosec
             rate_limit_headers=True,
         )
         self.mock_logger_instance.info.assert_called_with(
@@ -93,10 +92,10 @@ class TestCoinbaseClient(unittest.TestCase):
         self.mock_rest_client_class.reset_mock()
         self.mock_logger_instance.reset_mock()
 
-        CoinbaseClient(api_key="direct_key", api_secret="direct_secret")
+        CoinbaseClient(api_key="direct_key", api_secret="direct_secret")  # nosec
         self.mock_rest_client_class.assert_called_once_with(
             api_key="direct_key",
-            api_secret="direct_secret",
+            api_secret="direct_secret",  # nosec
             rate_limit_headers=True,
         )
         self.mock_logger_instance.info.assert_called_with(
@@ -124,7 +123,7 @@ class TestCoinbaseClient(unittest.TestCase):
     def test_initialization_empty_api_key(self):
         """Test initialization fails if API key is an empty string."""
         with self.assertRaises(AssertionError) as cm:
-            CoinbaseClient(api_key="", api_secret="a-secret")
+            CoinbaseClient(api_key="", api_secret="a-secret")  # nosec
         self.assertEqual(str(cm.exception), "API key must be a non-empty string.")
 
     def test_initialization_no_api_secret(self):
@@ -137,7 +136,7 @@ class TestCoinbaseClient(unittest.TestCase):
     def test_initialization_empty_api_secret(self):
         """Test initialization fails if API secret is an empty string."""
         with self.assertRaises(AssertionError) as cm:
-            CoinbaseClient(api_key="an-api-key", api_secret="")
+            CoinbaseClient(api_key="an-api-key", api_secret="")  # nosec
         self.assertEqual(str(cm.exception), "API secret must be a non-empty string.")
 
     def test_generate_client_order_id(self):
@@ -712,6 +711,7 @@ class TestCoinbaseClient(unittest.TestCase):
             f"Assertion failed in cancel_orders for {order_ids}: Each item in 'results' should be a dictionary.",
             exc_info=True,
         )
+
 
 if __name__ == "__main__":
     unittest.main()

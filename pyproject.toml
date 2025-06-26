@@ -10,3 +10,6 @@ description = "A crypto trading bot for Coinbase Advanced Trade."
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["trading*"]
+
+[tool.bandit]
+skips = ["B101"]

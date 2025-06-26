@@ -11,7 +11,7 @@ from typing import Dict, Any
 
 # Added imports for logger setup
 from trading.logger import setup_logging, LoggerDirectoryError
-from trading import config as app_config  # Use alias to avoid pytest 'config' fixture conflict
+from trading import config as app_config
 
 
 def pytest_configure(config):

@@ -71,7 +71,9 @@ class TestPersistence(unittest.TestCase):
         mock_json_dump.assert_called_once_with(state_data, mock_file_open(), indent=4)
 
     @patch("trading.persistence.os.path.exists")
-    @patch("trading.persistence.open", new_callable=mock_open, read_data='{"key": "value"}')
+    @patch(
+        "trading.persistence.open", new_callable=mock_open, read_data='{"key": "value"}'
+    )
     @patch("trading.persistence.json.load")
     def test_load_trade_state_success(
         self, mock_json_load, mock_file_open, mock_os_exists
@@ -110,7 +112,10 @@ class TestPersistence(unittest.TestCase):
 
     @patch("trading.persistence.os.path.exists")
     @patch("trading.persistence.open", new_callable=mock_open, read_data="invalid json")
-    @patch("trading.persistence.json.load", side_effect=json.JSONDecodeError("Error", "doc", 0))
+    @patch(
+        "trading.persistence.json.load",
+        side_effect=json.JSONDecodeError("Error", "doc", 0),
+    )
     def test_load_trade_state_json_decode_error(
         self, mock_json_load, mock_file_open, mock_os_exists
     ):

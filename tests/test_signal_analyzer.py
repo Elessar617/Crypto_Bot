@@ -1,8 +1,7 @@
 """Unit tests for the trading.signal_analyzer module."""
 
 import logging
-import os
-import sys
+
 import unittest
 from unittest.mock import MagicMock
 

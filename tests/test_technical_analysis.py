@@ -8,9 +8,6 @@ import pandas as pd
 import numpy as np
 import ta  # type: ignore
 
-import sys
-import os
-
 from trading.technical_analysis import (
     calculate_rsi,
     calculate_sma,
