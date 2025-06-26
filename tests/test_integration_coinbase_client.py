@@ -7,20 +7,18 @@ NOTE: These tests are mocked to avoid dependency on the live Coinbase Sandbox AP
 import os
 import sys
 import unittest
-from unittest.mock import patch
-from pathlib import Path
+import importlib
+from unittest.mock import patch, MagicMock
+from dotenv import load_dotenv
 import pytest
 from typing import TYPE_CHECKING
 
-# Add the project root to the Python path
-project_root = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(project_root / "Active/Single-File/v6"))
+# Add the project root to sys.path to allow for absolute imports of project modules
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
-# Now we can import our modules
-from coinbase_client import CoinbaseClient
-import config
-from dotenv import load_dotenv
-
+# The TYPE_CHECKING block is for static analysis and avoids circular imports
 if TYPE_CHECKING:
     from coinbase_client import CoinbaseClient
     import config
@@ -43,8 +41,18 @@ class TestIntegrationCoinbaseClient(unittest.TestCase):
 
     def setUp(self):
         """Set up the test client before each test."""
+        # Remove potentially mocked modules from other tests before importing.
+        if 'config' in sys.modules:
+            del sys.modules['config']
+        if 'coinbase_client' in sys.modules:
+            del sys.modules['coinbase_client']
+
         # Load environment variables from .env file
         load_dotenv()
+
+        # Now import the modules fresh.
+        import config
+        import coinbase_client
 
         # Patch the RESTClient to avoid actual API calls
         self.patcher = patch("coinbase_client.RESTClient")
@@ -53,7 +61,7 @@ class TestIntegrationCoinbaseClient(unittest.TestCase):
         self.mock_rest_client_instance = self.mock_rest_client_class.return_value
 
         # This test is designed for a sandbox environment.
-        self.client = CoinbaseClient(api_url=config.COINBASE_SANDBOX_API_URL)
+        self.client = coinbase_client.CoinbaseClient(api_url=config.COINBASE_SANDBOX_API_URL)
         self.assertIsNotNone(
             self.client, "CoinbaseClient instance could not be created."
         )

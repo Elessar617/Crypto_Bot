@@ -156,8 +156,8 @@ To measure the *quality* and *effectiveness* of our tests, not just their quanti
 *   **Goal:** Ensure that our test suite can detect small, intentionally introduced bugs (mutations). A "surviving" mutant indicates a weakness in our tests that must be fixed.
 *   **Tool:** We will use `mutmut` for Python.
 *   **Mutation Testing Progress:**
-    *   **Status:** Iteratively analyzing and killing surviving mutants in `coinbase_client.py`.
-    *   **Score:** 241/342 killed (70.5%) | 101 survived (29.5%)
+    *   **Status:** **In Progress.** The `coinbase_client.py` module refactoring is complete, and all syntax errors have been resolved. The client is now fully compliant with the `coinbase-advanced-py` SDK. Resuming mutation testing to establish a new baseline score.
+    *   **Score:** 241/342 killed (70.5%) | 101 survived (29.5%) - **Note: This score is outdated and will be recalculated.**
     *   **Task List:**
         *   [x] Update test strategy in `v6_plan.md` to risk-based approach.
         *   [x] Add `mutmut` to `requirements.txt` and install.
@@ -170,6 +170,8 @@ To measure the *quality* and *effectiveness* of our tests, not just their quanti
         *   [x] **`get_product_book`:** Added comprehensive tests for input validation, malformed data, and exception handling. Fixed assertion propagation bug.
         *   [x] **`get_accounts`:** Added comprehensive tests for all response formats, data integrity, and malformed data. Fixed assertion propagation bug.
         *   [x] **`get_product`:** Added comprehensive tests for all response formats, data integrity, and exception handling. Fixed assertion propagation bug.
+        *   [x] **Refactor `coinbase_client.py` for SDK Compliance:** Reviewed the `coinbase-advanced-py` SDK and updated all client methods (`get_accounts`, `get_product_candles`, `get_product_book`, `get_product`, `limit_order_buy`, `limit_order_sell`, `get_order`, `cancel_orders`) to correctly process SDK response objects using the `.to_dict()` method. Resolved all related syntax and linting errors.
+        *   [ ] **Resume Mutation Testing:** Restart `mutmut` on the refactored `coinbase_client.py` to get a new baseline score.
         *   [ ] **Next Target: `cancel_orders`:** Analyze surviving mutants and write targeted tests.
         *   [ ] Continue iterating until mutation score is satisfactory for Tier 1.
 

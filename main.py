@@ -20,7 +20,7 @@ import persistence
 import technical_analysis
 from trading import signal_analyzer, order_calculator
 from trading.trade_manager import TradeManager
-from logger import get_logger
+from logger import LoggerDirectoryError, get_logger, setup_logging
 
 
 def run_bot() -> None:
@@ -31,9 +31,20 @@ def run_bot() -> None:
 
     Includes comprehensive error handling and logging.
     """
-    # Initialize logger
-    logger = get_logger("v6_bot_main")
-    logger.info("--- Starting v6 crypto trading bot run ---")
+    try:
+        # Initialize the logger as the very first step.
+        setup_logging(
+            level=config.LOG_LEVEL,
+            log_file=config.LOG_FILE,
+            persistence_dir=config.PERSISTENCE_DIR,
+        )
+        logger = get_logger()
+        logger.info("--- Starting v6 crypto trading bot run ---")
+    except (LoggerDirectoryError, ValueError) as e:
+        # If logger setup fails, there's no logger. Print to stderr and exit.
+        print(f"CRITICAL: Logger initialization failed: {e}", file=sys.stderr)
+        sys.exit(1)
+
     start_time = time.time()
 
     try:

@@ -3,53 +3,27 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch, MagicMock, Mock, call, PropertyMock
+from unittest.mock import patch, MagicMock, ANY, call
 import uuid
 from requests.exceptions import HTTPError, RequestException
 
-# Add the project root to sys.path to allow for absolute imports of project modules
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# Add the project root to sys.path
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# Global imports that will be mocked or used in class setup
-CoinbaseClient = None
-config = None
-logger = None
+# Now that the path is set, we can import the class to be tested
+from coinbase_client import CoinbaseClient
 
 
 class TestCoinbaseClient(unittest.TestCase):
-    """Test suite for the CoinbaseClient class."""
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up a dummy environment and import modules under test."""
-        cls.original_environ = dict(os.environ)
-        os.environ["COINBASE_API_KEY"] = "dummy_key_for_import"
-        os.environ["COINBASE_API_SECRET"] = "dummy_secret_for_import"
-
-        global CoinbaseClient, config, logger
-        # We must import the modules here AFTER the environment is set up
-        from coinbase_client import CoinbaseClient as Client
-        import config as conf
-        import logger as log
-
-        # Assign to class attributes so tests can use them
-        cls.CoinbaseClient = Client
-        cls.config = conf
-        cls.logger = log
-
-    @classmethod
-    def tearDownClass(cls):
-        """Restore the original environment."""
-        os.environ.clear()
-        os.environ.update(cls.original_environ)
+    """Test suite for the CoinbaseClient."""
 
     def setUp(self):
-        """Set up a clean, mocked environment for each test."""
-        patcher_rest_client = patch("coinbase_client.RESTClient")
-        patcher_config = patch("coinbase_client.config")
-        patcher_logger = patch("coinbase_client.logger")
+        """Set up test environment for each test."""
+        patcher_rest_client = patch('coinbase_client.RESTClient')
+        patcher_config = patch('coinbase_client.config')
+        patcher_logger = patch('coinbase_client.logger')
 
         self.mock_rest_client_class = patcher_rest_client.start()
         self.mock_config_module = patcher_config.start()
@@ -59,1145 +33,524 @@ class TestCoinbaseClient(unittest.TestCase):
         self.addCleanup(patcher_config.stop)
         self.addCleanup(patcher_logger.stop)
 
-        self.mock_rest_client_instance = self.mock_rest_client_class.return_value
         self.mock_logger_instance = self.mock_logger_module.get_logger.return_value
-
-        # Create a reusable mock HTTPError
-        mock_response = MagicMock()
-        mock_response.status_code = 404
-        mock_response.text = "Test Error"
-        self.mock_http_error = HTTPError("Test Error")
-        self.mock_http_error.response = mock_response
+        self.mock_rest_client_instance = self.mock_rest_client_class.return_value
 
         self.mock_config_module.COINBASE_API_KEY = "test_api_key"
         self.mock_config_module.COINBASE_API_SECRET = "test_api_secret"
+        self.mock_config_module.COINBASE_SANDBOX_API_URL = "https://api.sandbox.coinbase.com"
+
+        # Common HTTP/Request exception mocks
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.text = "Not Found"
+        self.mock_http_error = HTTPError("Test HTTP Error", response=mock_response)
+        self.mock_request_exception = RequestException("Test Request Exception")
+
+    def _test_api_call_http_error(self, method_name, api_args, log_message):
+        """Helper to test HTTPError handling for a given client method."""
+        getattr(self.mock_rest_client_instance, method_name).side_effect = self.mock_http_error
+        client = CoinbaseClient()
+        result = getattr(client, method_name)(**api_args)
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(log_message, exc_info=True)
+
+    def _test_api_call_request_exception(self, method_name, api_args, log_message):
+        """Helper to test RequestException handling for a given client method."""
+        getattr(self.mock_rest_client_instance, method_name).side_effect = self.mock_request_exception
+        client = CoinbaseClient()
+        result = getattr(client, method_name)(**api_args)
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(log_message, exc_info=True)
+
+    def _test_api_call_unexpected_error(self, method_name, api_args, log_message):
+        """Helper to test unexpected error handling for a given client method."""
+        getattr(self.mock_rest_client_instance, method_name).side_effect = Exception("Chaos")
+        client = CoinbaseClient()
+        result = getattr(client, method_name)(**api_args)
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(log_message, exc_info=True)
 
     # --- Test Initialization ---
 
     def test_initialization_success(self):
-        """Test successful initialization of CoinbaseClient."""
-        self.CoinbaseClient()
+        """Test successful initialization of CoinbaseClient uses config values."""
+        CoinbaseClient()
         self.mock_rest_client_class.assert_called_once_with(
             api_key="test_api_key",
             api_secret="test_api_secret",
-            rate_limit_headers=True,
+            base_url="https://api.sandbox.coinbase.com",
+            rate_limit_headers=True
         )
         self.mock_logger_instance.info.assert_called_with(
-            "Coinbase RESTClient initialized successfully for production URL."
+            "Coinbase RESTClient initialized successfully for https://api.sandbox.coinbase.com URL."
         )
 
-    def test_initialization_rest_client_exception(self):
+    def test_initialization_with_arguments(self):
+        """Test successful initialization with direct arguments."""
+        CoinbaseClient(api_key="arg_key", api_secret="arg_secret", api_url="https://custom.url")
+        self.mock_rest_client_class.assert_called_once_with(
+            api_key="arg_key",
+            api_secret="arg_secret",
+            base_url="https://custom.url",
+            rate_limit_headers=True
+        )
+
+    def test_initialization_failure(self):
         """Test initialization failure if RESTClient instantiation fails."""
         self.mock_rest_client_class.side_effect = Exception("Connection Failed")
-        with self.assertRaisesRegex(RuntimeError, "initialization failed: Connection Failed"):
-            self.CoinbaseClient()
+        with self.assertRaisesRegex(RuntimeError, "Coinbase RESTClient initialization failed: Connection Failed"):
+            CoinbaseClient()
         self.mock_logger_instance.error.assert_called_with(
             "Failed to initialize Coinbase RESTClient: Connection Failed", exc_info=True
         )
 
-    # --- Test Core Methods ---
+    def test_initialization_no_api_key(self):
+        """Test initialization fails if API key is missing."""
+        self.mock_config_module.COINBASE_API_KEY = None
+        with self.assertRaisesRegex(AssertionError, "API key must be a non-empty string."):
+            CoinbaseClient()
 
-    def test_get_accounts_success_with_dict_key(self):
-        """Test get_accounts success when response is a dict with an 'accounts' key."""
-        expected_accounts = [{"id": "123", "currency": "BTC"}]
-        self.mock_rest_client_instance.get_accounts.return_value = {"accounts": expected_accounts}
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertEqual(accounts, expected_accounts)
+    def test_initialization_empty_api_key(self):
+        """Test initialization fails if API key is an empty string."""
+        with self.assertRaisesRegex(AssertionError, "API key must be a non-empty string."):
+            CoinbaseClient(api_key="", api_secret="a-secret")
+
+    def test_initialization_no_api_secret(self):
+        """Test initialization fails if API secret is missing."""
+        self.mock_config_module.COINBASE_API_SECRET = None
+        with self.assertRaisesRegex(AssertionError, "API secret must be a non-empty string."):
+            CoinbaseClient()
+
+    def test_initialization_empty_api_secret(self):
+        """Test initialization fails if API secret is an empty string."""
+        with self.assertRaisesRegex(AssertionError, "API secret must be a non-empty string."):
+            CoinbaseClient(api_key="an-api-key", api_secret="")
+
+    def test_generate_client_order_id(self):
+        """Test the generation of a unique client order ID."""
+        client = CoinbaseClient()
+        order_id = client._generate_client_order_id()
+        self.assertIsInstance(order_id, str)
+        self.assertTrue(len(order_id) > 0)
+
+    # --- Test get_accounts ---
+
+    def test_get_accounts_success(self):
+        """Test successful retrieval of accounts."""
+        mock_accounts = [{'id': '1', 'name': 'BTC Wallet', 'balance': '1.0'}]
+        self.mock_rest_client_instance.get_accounts.return_value = {'accounts': mock_accounts}
+        client = CoinbaseClient()
+        result = client.get_accounts()
+        self.assertEqual(result, mock_accounts)
+        self.mock_logger_instance.debug.assert_called_with("Attempting to retrieve accounts.")
+        self.mock_logger_instance.info.assert_called_with(f"Successfully retrieved {len(mock_accounts)} accounts.")
         self.mock_rest_client_instance.get_accounts.assert_called_once()
-        self.mock_logger_instance.info.assert_called_with(
-            f"Successfully retrieved {len(expected_accounts)} accounts."
-        )
 
-    def test_get_accounts_success_with_accounts_attribute(self):
-        """Test get_accounts success when response is an object with an .accounts attribute."""
-        expected_accounts = [{"id": "456", "currency": "ETH"}]
-        response_obj = type("AccountsResponse", (), {"accounts": expected_accounts})()
-        self.mock_rest_client_instance.get_accounts.return_value = response_obj
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertEqual(accounts, expected_accounts)
+    def test_get_accounts_error_handling(self):
+        """Test all error handling for get_accounts."""
+        api_args = {}
+        self._test_api_call_http_error('get_accounts', api_args, f"Network error retrieving accounts: {self.mock_http_error}")
+        self._test_api_call_request_exception('get_accounts', api_args, f"Network error retrieving accounts: {self.mock_request_exception}")
+        self._test_api_call_unexpected_error('get_accounts', api_args, "An unexpected error occurred while retrieving accounts: Chaos")
 
-    def test_get_accounts_success_direct_list_response(self):
-        """Test get_accounts success when response is a direct list."""
-        expected_accounts = [{"id": "789", "currency": "USDC"}]
-        self.mock_rest_client_instance.get_accounts.return_value = expected_accounts
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertEqual(accounts, expected_accounts)
-
-    def test_get_accounts_malformed_data_in_list(self):
-        """Test get_accounts with a list containing non-dict items."""
-        malformed_accounts = [{"id": "1"}, "not_a_dict"]
-        self.mock_rest_client_instance.get_accounts.return_value = malformed_accounts
-        client = self.CoinbaseClient()
-        # This should fail until the exception handling is fixed
-        with self.assertRaisesRegex(AssertionError, "Not all items in accounts list are dictionaries."):
-            client.get_accounts()
-
-    def test_get_accounts_unexpected_format(self):
-        """Test get_accounts with an unexpected response format."""
-        self.mock_rest_client_instance.get_accounts.return_value = "just a string"
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertIsNone(accounts)
-        self.mock_logger_instance.warning.assert_called_once_with(
-            f"Received unexpected format for accounts data: {type('str')}"
-        )
-
-    def test_get_accounts_api_exception(self):
-        """Test get_accounts handles API exceptions gracefully."""
-        self.mock_rest_client_instance.get_accounts.side_effect = Exception("API Error")
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertIsNone(accounts)
-        self.mock_rest_client_instance.get_accounts.assert_called_once()
+    def test_get_accounts_malformed_response_not_dict(self):
+        """Test get_accounts handles a response that is not a dictionary."""
+        self.mock_rest_client_instance.get_accounts.return_value = "not_a_dict"
+        client = CoinbaseClient()
+        result = client.get_accounts()
+        self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An unexpected error occurred while retrieving accounts: API Error", exc_info=True
+            "An unexpected error occurred while retrieving accounts: get_accounts response should be a dictionary.",
+            exc_info=True
         )
 
-    def test_get_accounts_http_error(self):
-        """Test get_accounts handles HTTPError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 400
-        mock_response.text = "Bad Request"
-        http_error = HTTPError(response=mock_response)
-        self.mock_rest_client_instance.get_accounts.side_effect = http_error
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertIsNone(accounts)
-        self.mock_logger_instance.error.assert_called_with(
-            f"HTTP error retrieving accounts: {mock_response.status_code} {mock_response.text}",
-            exc_info=True,
-        )
-
-    def test_get_accounts_request_exception(self):
-        """Test get_accounts handles RequestException."""
-        request_exception = RequestException("Connection timeout")
-        self.mock_rest_client_instance.get_accounts.side_effect = request_exception
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertIsNone(accounts)
-        self.mock_logger_instance.error.assert_called_with(
-            f"Request exception retrieving accounts: {request_exception}",
-            exc_info=True,
-        )
-
-    def test_get_accounts_no_accounts_key(self):
+    def test_get_accounts_malformed_response_no_accounts_key(self):
         """Test get_accounts handles a response missing the 'accounts' key."""
-        self.mock_rest_client_instance.get_accounts.return_value = {"data": "no accounts here"}
-        client = self.CoinbaseClient()
-        accounts = client.get_accounts()
-        self.assertIsNone(accounts)
-        self.mock_logger_instance.warning.assert_called_with(
-            "Received unexpected format for accounts data: <class 'dict'>"
+        self.mock_rest_client_instance.get_accounts.return_value = {'data': []}
+        client = CoinbaseClient()
+        result = client.get_accounts()
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while retrieving accounts: 'accounts' key is missing in the response.",
+            exc_info=True
         )
+
+    def test_get_accounts_malformed_response_accounts_not_list(self):
+        """Test get_accounts handles a response where 'accounts' is not a list."""
+        self.mock_rest_client_instance.get_accounts.return_value = {'accounts': 'not_a_list'}
+        client = CoinbaseClient()
+        result = client.get_accounts()
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while retrieving accounts: 'accounts' key should be a list.",
+            exc_info=True
+        )
+
+    def test_get_accounts_invalid_json_response(self):
+        """Test get_accounts handles a response that is an invalid JSON string."""
+        invalid_json_string = "{'bad': 'json'"
+        self.mock_rest_client_instance.get_accounts.return_value = invalid_json_string
+        client = CoinbaseClient()
+        result = client.get_accounts()
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_any_call(
+            "Failed to decode JSON from response: %s", invalid_json_string
+        )
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while retrieving accounts: get_accounts response should be a dictionary.",
+            exc_info=True
+        )
+
+    # --- Test get_product_candles ---
 
     def test_get_product_candles_success(self):
-        """Test get_product_candles successfully retrieves candles."""
-        expected_candles = [
-            {"start": "1672531200", "low": "16000", "high": "16100", "open": "16050", "close": "16080", "volume": "100"}
-        ]
-        self.mock_rest_client_instance.get_public_candles.return_value = {"candles": expected_candles}
-        client = self.CoinbaseClient()
-        start_time = "1672531200"
-        end_time = "1672534800"
-        candles = client.get_product_candles("BTC-USD", "ONE_HOUR", start=start_time, end=end_time)
-        self.assertEqual(candles, expected_candles)
-        self.mock_rest_client_instance.get_public_candles.assert_called_once_with(
-            product_id="BTC-USD",
-            granularity="ONE_HOUR",
-            start=start_time,
-            end=end_time,
-        )
-        self.mock_logger_instance.info.assert_called_with(
-            f"Successfully retrieved {len(expected_candles)} candles for BTC-USD."
-        )
+        """Test successful retrieval of product candles."""
+        mock_candles = [{'time': 123, 'price': '100'}]
+        self.mock_rest_client_instance.get_product_candles.return_value = {'candles': mock_candles}
+        client = CoinbaseClient()
+        candles = client.get_product_candles("BTC-USD", "ONE_MINUTE")
+        self.assertEqual(candles, mock_candles)
+        self.mock_logger_instance.info.assert_called_with(f"Successfully retrieved {len(mock_candles)} candles for BTC-USD.")
 
-    def test_get_product_candles_success_object_response(self):
-        """Test get_product_candles successfully retrieves candles from an object response."""
-        expected_candles = [{"start": "456", "high": "200"}]
+    def test_get_product_candles_error_handling(self):
+        """Test all error handling for get_product_candles."""
+        api_args = {'product_id': 'BTC-USD', 'granularity': 'ONE_MINUTE'}
+        self._test_api_call_http_error('get_product_candles', api_args, f"Network error retrieving candles for BTC-USD: {self.mock_http_error}")
+        self._test_api_call_request_exception('get_product_candles', api_args, f"Network error retrieving candles for BTC-USD: {self.mock_request_exception}")
+        self._test_api_call_unexpected_error('get_product_candles', api_args, "An unexpected error occurred while retrieving candles for BTC-USD: Chaos")
 
-        # Create a mock object with a 'candles' attribute to test the 'elif' branch
-        mock_response = MagicMock()
-        mock_response.candles = expected_candles
-
-        self.mock_rest_client_instance.get_public_candles.return_value = mock_response
-
-        client = self.CoinbaseClient()
-        candles = client.get_product_candles("BTC-USD", "15_MINUTE")
-
-        self.assertEqual(candles, expected_candles)
-        self.mock_rest_client_instance.get_public_candles.assert_called_once_with(
-            product_id="BTC-USD", start="0", end="0", granularity="15_MINUTE"
-        )
-        self.mock_logger_instance.info.assert_called_with(
-            f"Successfully retrieved {len(expected_candles)} candles for BTC-USD."
-        )
-
-    def test_get_product_candles_api_exception(self):
-        """Test get_product_candles handles API exceptions gracefully."""
-        self.mock_rest_client_instance.get_public_candles.side_effect = Exception("API Error")
-        client = self.CoinbaseClient()
-        candles = client.get_product_candles("BTC-USD", "ONE_HOUR")
-        self.assertIsNone(candles)
+    def test_get_product_candles_malformed_response_not_dict(self):
+        """Test get_product_candles handles a response that is not a dictionary."""
+        self.mock_rest_client_instance.get_product_candles.return_value = "not_a_dict"
+        client = CoinbaseClient()
+        result = client.get_product_candles(product_id='BTC-USD', granularity='ONE_MINUTE')
+        self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An unexpected error occurred while retrieving candles for BTC-USD: API Error",
-            exc_info=True,
+            "An unexpected error occurred while retrieving candles for BTC-USD: get_product_candles response should be a dictionary.",
+            exc_info=True
         )
 
-    def test_get_product_candles_success_direct_list(self):
-        """Test get_product_candles when the API returns a list directly."""
-        expected_candles = [
-            {
-                "start": "1632828000",
-                "low": "41000",
-                "high": "42000",
-                "open": "41500",
-                "close": "41800",
-                "volume": "100",
-            }
-        ]
-        self.mock_rest_client_instance.get_public_candles.return_value = expected_candles
-        client = self.CoinbaseClient()
-        candles = client.get_product_candles(
-            product_id="ETH-USD", granularity="ONE_DAY"
-        )
-        self.assertEqual(candles, expected_candles)
-        self.mock_logger_instance.info.assert_called_with(
-            f"Successfully retrieved {len(expected_candles)} candles for ETH-USD."
-        )
-
-    def test_get_product_candles_invalid_input(self):
-        """Test get_product_candles with invalid input for product_id and granularity."""
-        client = self.CoinbaseClient()
-        with self.assertRaisesRegex(AssertionError, "product_id must be a non-empty string"):
-            client.get_product_candles("", "ONE_DAY")
-        with self.assertRaisesRegex(AssertionError, "granularity must be a non-empty string"):
-            client.get_product_candles("BTC-USD", "")
-
-    def test_get_product_candles_http_error(self):
-        """Test get_product_candles handles HTTPError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-        http_error = HTTPError("Internal Server Error")
-        http_error.response = mock_response
-
-        self.mock_rest_client_instance.get_public_candles.side_effect = http_error
-        client = self.CoinbaseClient()
-        candles = client.get_product_candles("BTC-USD", "ONE_HOUR")
-        self.assertIsNone(candles)
+    def test_get_product_candles_malformed_response_no_candles_key(self):
+        """Test get_product_candles handles a response missing the 'candles' key."""
+        self.mock_rest_client_instance.get_product_candles.return_value = {'data': []}
+        client = CoinbaseClient()
+        result = client.get_product_candles(product_id='BTC-USD', granularity='ONE_MINUTE')
+        self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "HTTP error retrieving candles for BTC-USD: 500 Internal Server Error",
-            exc_info=True,
+            "An unexpected error occurred while retrieving candles for BTC-USD: 'candles' key missing in response.",
+            exc_info=True
         )
+
+    def test_get_product_candles_malformed_response_candles_not_list(self):
+        """Test get_product_candles handles a response where 'candles' is not a list."""
+        self.mock_rest_client_instance.get_product_candles.return_value = {'candles': 'not_a_list'}
+        client = CoinbaseClient()
+        result = client.get_product_candles(product_id='BTC-USD', granularity='ONE_MINUTE')
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while retrieving candles for BTC-USD: 'candles' key must be a list.",
+            exc_info=True
+        )
+
+    # --- Test get_product_book ---
 
     def test_get_product_book_success(self):
-        """Test successful retrieval of the product book via pricebook attribute."""
-        expected_book = {'bids': [], 'asks': []}
-        # Simulate the response object having a 'pricebook' attribute
-        response_obj = type("PricebookResponse", (), {"pricebook": expected_book})()
-        self.mock_rest_client_instance.get_product_book.return_value = response_obj
-        client = self.CoinbaseClient()
-        book = client.get_product_book('BTC-USD')
-        self.assertEqual(book, expected_book)
-        self.mock_rest_client_instance.get_product_book.assert_called_once_with(product_id='BTC-USD', limit=None)
-        self.mock_logger_instance.info.assert_called_with('Successfully retrieved product book for BTC-USD.')
-
-    def test_get_product_book_success_with_pricebook_key(self):
-        """Test successful retrieval when response is a dict with a 'pricebook' key."""
-        expected_book = {'bids': ["1"], 'asks': ["2"]}
-        self.mock_rest_client_instance.get_product_book.return_value = {'pricebook': expected_book}
-        client = self.CoinbaseClient()
-        book = client.get_product_book('BTC-USD')
-        self.assertEqual(book, expected_book)
-
-    def test_get_product_book_success_direct_dict_response(self):
-        """Test successful retrieval when API returns the book as a direct dictionary."""
-        expected_book = {"bids": [["100", "10", 1]], "asks": [["101", "5", 1]]}
-        self.mock_rest_client_instance.get_product_book.return_value = expected_book
-        client = self.CoinbaseClient()
+        """Test successful retrieval of product book."""
+        mock_book = {'bids': [], 'asks': []}
+        self.mock_rest_client_instance.get_product_book.return_value = {'pricebook': mock_book}
+        client = CoinbaseClient()
         book = client.get_product_book("BTC-USD")
-        self.assertEqual(book, expected_book)
-        self.mock_logger_instance.info.assert_called_with(
-            "Successfully retrieved product book for BTC-USD."
-        )
+        self.assertEqual(book, mock_book)
+        self.mock_logger_instance.info.assert_called_with("Successfully retrieved order book for BTC-USD.")
 
-    def test_get_product_book_invalid_product_id(self):
-        """Test get_product_book with an invalid product_id."""
-        client = self.CoinbaseClient()
-        with self.assertRaisesRegex(AssertionError, "product_id must be a non-empty string."):
-            client.get_product_book("")
-        with self.assertRaisesRegex(AssertionError, "product_id must be a non-empty string."):
-            client.get_product_book(None)
+    def test_get_product_book_error_handling(self):
+        """Test all error handling for get_product_book."""
+        api_args = {'product_id': 'BTC-USD'}
+        self._test_api_call_http_error('get_product_book', api_args, f"Network error retrieving order book for BTC-USD: {self.mock_http_error}")
+        self._test_api_call_request_exception('get_product_book', api_args, f"Network error retrieving order book for BTC-USD: {self.mock_request_exception}")
+        self._test_api_call_unexpected_error('get_product_book', api_args, "An unexpected error occurred while retrieving order book for BTC-USD: Chaos")
 
-    def test_get_product_book_invalid_limit(self):
-        """Test get_product_book with an invalid limit."""
-        client = self.CoinbaseClient()
-        with self.assertRaisesRegex(AssertionError, "limit must be a positive integer."):
-            client.get_product_book("BTC-USD", limit=0)
-        with self.assertRaisesRegex(AssertionError, "limit must be a positive integer."):
-            client.get_product_book("BTC-USD", limit=-1)
-        with self.assertRaisesRegex(AssertionError, "limit must be a positive integer."):
-            client.get_product_book("BTC-USD", limit="abc")
-
-    def test_get_product_book_unrecognized_format(self):
-        """Test a response format that is not recognized."""
-        malformed_response = {"data": "unexpected"}
-        self.mock_rest_client_instance.get_product_book.return_value = malformed_response
-        client = self.CoinbaseClient()
-        book = client.get_product_book("BTC-USD")
-        self.assertIsNone(book)
-        self.mock_logger_instance.warning.assert_called_once_with(
-            f"get_product_book for BTC-USD response format not recognized or key data missing: {malformed_response}"
-        )
-
-    def test_get_product_book_malformed_missing_bids(self):
-        """Test a book_data dictionary missing the 'bids' key."""
-        malformed_book = {"asks": []}  # Missing 'bids'
-        self.mock_rest_client_instance.get_product_book.return_value = {"pricebook": malformed_book}
-        client = self.CoinbaseClient()
-        with self.assertRaisesRegex(AssertionError, "Book data is missing 'bids' or 'asks'."):
-            client.get_product_book("BTC-USD")
-
-    def test_get_product_book_http_error(self):
-        """Test HTTPError during get_product_book call."""
-        self.mock_rest_client_instance.get_product_book.side_effect = self.mock_http_error
-        client = self.CoinbaseClient()
-        book = client.get_product_book("BTC-USD")
-        self.assertIsNone(book)
-        self.mock_logger_instance.error.assert_called_once_with(
-            f"HTTP error retrieving order book for BTC-USD: 404 Test Error",
-            exc_info=True,
-        )
-
-    def test_get_product_book_generic_exception(self):
-        """Test a generic exception during get_product_book call."""
-        self.mock_rest_client_instance.get_product_book.side_effect = Exception("Generic Error")
-        client = self.CoinbaseClient()
-        book = client.get_product_book("BTC-USD")
-        self.assertIsNone(book)
-        self.mock_logger_instance.error.assert_called_once_with(
-            "An unexpected error occurred while retrieving order book for BTC-USD: Generic Error",
+    def test_get_product_book_malformed_response_not_dict(self):
+        """Test get_product_book handles a response that is not a dictionary."""
+        self.mock_rest_client_instance.get_product_book.return_value = "not_a_dict"
+        client = CoinbaseClient()
+        result = client.get_product_book(product_id='BTC-USD')
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while retrieving order book for BTC-USD: get_product_book response should be a dictionary.",
             exc_info=True
         )
 
-    def test_get_product_book_no_pricebook_key(self):
+    def test_get_product_book_malformed_response_no_pricebook_key(self):
         """Test get_product_book handles a response missing the 'pricebook' key."""
-        self.mock_rest_client_instance.get_product_book.return_value = {'data': 'no book here'}
-        client = self.CoinbaseClient()
-        book = client.get_product_book('BTC-USD')
-        self.assertIsNone(book)
-        self.mock_logger_instance.warning.assert_called_with(
-            "get_product_book for BTC-USD response format not recognized or key data missing: {'data': 'no book here'}"
-        )
-
-    def test_get_product_book_http_error(self):
-        """Test get_product_book handles HTTP errors."""
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-        http_error = HTTPError("Server Error")
-        http_error.response = mock_response
-
-        self.mock_rest_client_instance.get_product_book.side_effect = http_error
-        client = self.CoinbaseClient()
-        book = client.get_product_book('BTC-USD')
-        self.assertIsNone(book)
-        self.mock_logger_instance.error.assert_called_with(
-            'HTTP error retrieving order book for BTC-USD: 500 Internal Server Error',
-            exc_info=True,
-        )
-
-    def test_get_product_book_request_exception(self):
-        """Test get_product_book handles request exceptions."""
-        self.mock_rest_client_instance.get_product_book.side_effect = RequestException('Request Exception')
-        client = self.CoinbaseClient()
-        book = client.get_product_book('BTC-USD')
-        self.assertIsNone(book)
-        self.mock_logger_instance.error.assert_called_with(
-            'Request exception retrieving order book for BTC-USD: Request Exception',
-            exc_info=True,
-        )
-
-    # Tests for get_product
-    def test_get_product_success_dict_response(self):
-        """Test successful retrieval and full data mapping for a single product."""
-        # Create a mock product object that mimics the structure of the SDK's Product object
-        mock_product = MagicMock()
-        mock_product.product_id = 'BTC-USD'
-        mock_product.price = '50000.00'
-        mock_product.price_percentage_change_24h = '0.05'
-        mock_product.volume_24h = '1000'
-        mock_product.volume_percentage_change_24h = '0.10'
-        mock_product.base_increment = '0.00000001'
-        mock_product.quote_increment = '0.01'
-        mock_product.quote_min_size = '1.00'
-        mock_product.quote_max_size = '1000000.00'
-        mock_product.base_min_size = '0.0001'
-        mock_product.base_max_size = '100'
-        mock_product.base_name = 'Bitcoin'
-        mock_product.quote_name = 'US Dollar'
-        mock_product.watched = False
-        mock_product.is_disabled = False
-        mock_product.new = False
-        mock_product.status = 'online'
-        mock_product.cancel_only = False
-        mock_product.limit_only = False
-        mock_product.post_only = False
-        mock_product.trading_disabled = False
-        mock_product.auction_mode = False
-        mock_product.product_type = 'SPOT'
-        mock_product.quote_currency_id = 'USD'
-        mock_product.base_currency_id = 'BTC'
-        mock_product.fcm_trading_session_details = None
-        mock_product.mid_market_price = '50000.50'
-
-        self.mock_rest_client_instance.get_products.return_value = {'products': [mock_product]}
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-
-        self.assertIsNotNone(product)
-        # Assert every single field to kill mutants in the conversion block
-        self.assertEqual(product['product_id'], mock_product.product_id)
-        self.assertEqual(product['price'], mock_product.price)
-        self.assertEqual(product['price_percentage_change_24h'], mock_product.price_percentage_change_24h)
-        self.assertEqual(product['volume_24h'], mock_product.volume_24h)
-        self.assertEqual(product['volume_percentage_change_24h'], mock_product.volume_percentage_change_24h)
-        self.assertEqual(product['base_increment'], mock_product.base_increment)
-        self.assertEqual(product['quote_increment'], mock_product.quote_increment)
-        self.assertEqual(product['quote_min_size'], mock_product.quote_min_size)
-        self.assertEqual(product['quote_max_size'], mock_product.quote_max_size)
-        self.assertEqual(product['base_min_size'], mock_product.base_min_size)
-        self.assertEqual(product['base_max_size'], mock_product.base_max_size)
-        self.assertEqual(product['base_name'], mock_product.base_name)
-        self.assertEqual(product['quote_name'], mock_product.quote_name)
-        self.assertEqual(product['watched'], mock_product.watched)
-        self.assertEqual(product['is_disabled'], mock_product.is_disabled)
-        self.assertEqual(product['new'], mock_product.new)
-        self.assertEqual(product['status'], mock_product.status)
-        self.assertEqual(product['cancel_only'], mock_product.cancel_only)
-        self.assertEqual(product['limit_only'], mock_product.limit_only)
-        self.assertEqual(product['post_only'], mock_product.post_only)
-        self.assertEqual(product['trading_disabled'], mock_product.trading_disabled)
-        self.assertEqual(product['auction_mode'], mock_product.auction_mode)
-        self.assertEqual(product['product_type'], mock_product.product_type)
-        self.assertEqual(product['quote_currency_id'], mock_product.quote_currency_id)
-        self.assertEqual(product['base_currency_id'], mock_product.base_currency_id)
-        self.assertEqual(product['fcm_trading_session_details'], mock_product.fcm_trading_session_details)
-        self.assertEqual(product['mid_market_price'], mock_product.mid_market_price)
-        self.assertEqual(product['min_market_funds'], mock_product.quote_min_size) # Check compatibility key
-        self.mock_logger_instance.info.assert_called_with('Successfully found and formatted product details for BTC-USD.')
-
-    def test_get_product_success_object_response(self):
-        """Test successful retrieval when response is an object with a .products attribute."""
-        mock_product = MagicMock()
-        mock_product.product_id = 'BTC-USD'
-        response_obj = type("ProductsResponse", (), {"products": [mock_product]})()
-        self.mock_rest_client_instance.get_products.return_value = response_obj
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-        self.assertIsNotNone(product)
-        self.assertEqual(product['product_id'], 'BTC-USD')
-
-    def test_get_product_not_found(self):
-        """Test get_product when the product is not in the response."""
-        mock_product_eth = MagicMock()
-        mock_product_eth.product_id = 'ETH-USD'
-        self.mock_rest_client_instance.get_products.return_value = {'products': [mock_product_eth]}
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD') # Look for a different product
-        self.assertIsNone(product)
-        self.mock_logger_instance.warning.assert_called_with('Could not find product details for BTC-USD in API response.')
-
-    def test_get_product_malformed_product_in_list(self):
-        """Test get_product when a product in the list is missing 'product_id'."""
-        mock_good_product = MagicMock()
-        mock_good_product.product_id = 'ETH-USD'
-        mock_bad_product = MagicMock()
-        del mock_bad_product.product_id # This object does not have the attribute
-        self.mock_rest_client_instance.get_products.return_value = {'products': [mock_bad_product, mock_good_product]}
-        client = self.CoinbaseClient()
-        product = client.get_product('ETH-USD')
-        self.assertIsNotNone(product) # Should skip the bad one and find the good one
-        self.assertEqual(product['product_id'], 'ETH-USD')
-
-    def test_get_product_malformed_response_no_products_key(self):
-        """Test get_product with a response missing the 'products' key."""
-        self.mock_rest_client_instance.get_products.return_value = {'data': 'no products key'}
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-        self.assertIsNone(product)
-        self.mock_logger_instance.warning.assert_any_call("Unexpected format for get_products response: <class 'dict'>")
-        self.mock_logger_instance.warning.assert_any_call('Could not find product details for BTC-USD in API response.')
-
-    def test_get_product_malformed_response_products_not_list(self):
-        """Test get_product when 'products' in the response is not a list."""
-        self.mock_rest_client_instance.get_products.return_value = {'products': 'not a list'}
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-        self.assertIsNone(product)
-        self.mock_logger_instance.warning.assert_any_call("Unexpected type for 'products' in API response: <class 'str'>")
-        self.mock_logger_instance.warning.assert_any_call('Could not find product details for BTC-USD in API response.')
-
-    def test_get_product_http_error(self):
-        """Test get_product handles HTTPError."""
-        self.mock_rest_client_instance.get_products.side_effect = self.mock_http_error
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-        self.assertIsNone(product)
-        self.mock_logger_instance.error.assert_called_with(
-            'HTTP error retrieving product BTC-USD: 404 Test Error',
-            exc_info=True
-        )
-
-    def test_get_product_request_exception(self):
-        """Test get_product handles RequestException."""
-        self.mock_rest_client_instance.get_products.side_effect = RequestException('Connection Error')
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-        self.assertIsNone(product)
-        self.mock_logger_instance.error.assert_called_with(
-            'Request exception retrieving product BTC-USD: Connection Error',
-            exc_info=True
-        )
-
-    def test_get_product_assertion_error_not_swallowed(self):
-        """Test that an AssertionError from input validation is not swallowed."""
-        client = self.CoinbaseClient()
-        # This will fail until the exception handling is fixed
-        with self.assertRaisesRegex(AssertionError, "Product ID must be a non-empty string."):
-            client.get_product(product_id=None)
-
-    def test_get_product_attribute_error_in_loop(self):
-        """Test get_product handles an AttributeError while processing the products list."""
-        # Use a stricter Mock with a spec. Accessing any attribute not in the spec
-        # (like 'price') will raise an AttributeError.
-        mock_bad_product = Mock(spec=['product_id'])
-        mock_bad_product.product_id = 'BTC-USD'
-
-        self.mock_rest_client_instance.get_products.return_value = {'products': [mock_bad_product]}
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-
-        self.assertIsNone(product)
-        self.mock_logger_instance.error.assert_called_once()
-        logged_error_message = self.mock_logger_instance.error.call_args[0][0]
-        self.assertIn("An unexpected error occurred while retrieving product BTC-USD", logged_error_message)
-
-    def test_get_product_unexpected_exception(self):
-        """Test get_product handles a generic Exception."""
-        self.mock_rest_client_instance.get_products.side_effect = Exception('Unexpected Error')
-        client = self.CoinbaseClient()
-        product = client.get_product('BTC-USD')
-        self.assertIsNone(product)
-        self.mock_logger_instance.error.assert_called_with(
-            'An unexpected error occurred while retrieving product BTC-USD: Unexpected Error',
-            exc_info=True
-        )
-
-    # Tests for limit_order_buy
-    def test_limit_order_buy_success(self):
-        """Test successful placement of a limit buy order."""
-        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = {
-            'success': True,
-            'order_id': 'test_order_id_123'
-        }
-        client = self.CoinbaseClient()
-        # Mock the internal client_order_id generation to have a predictable value
-        with patch.object(client, '_generate_client_order_id', return_value='test_client_order_id_456'):
-            result = client.limit_order_buy(product_id='BTC-USD', size='0.1', price='50000')
-
-        self.assertIsNotNone(result)
-        self.assertTrue(result['success'])
-        self.assertEqual(result['order_id'], 'test_order_id_123')
-        self.mock_rest_client_instance.limit_order_gtc_buy.assert_called_once_with(
-            client_order_id='test_client_order_id_456',
-            product_id='BTC-USD',
-            base_size='0.1',
-            limit_price='50000',
-            post_only=True
-        )
-        self.mock_logger_instance.info.assert_called_with('Limit buy order placed successfully for BTC-USD. Order ID: test_order_id_123')
-
-    def test_limit_order_buy_success_small_price(self):
-        """Test successful placement of a limit buy order with a small price."""
-        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = {
-            'success': True,
-            'order_id': 'test_order_id_small_price'
-        }
-        client = self.CoinbaseClient()
-        with patch.object(client, '_generate_client_order_id', return_value='test_client_order_id_small_price'):
-            result = client.limit_order_buy(product_id='DOGE-USD', size='10', price='1')
-
-        self.assertIsNotNone(result)
-        self.assertTrue(result['success'])
-        self.assertEqual(result['order_id'], 'test_order_id_small_price')
-        self.mock_rest_client_instance.limit_order_gtc_buy.assert_called_once_with(
-            client_order_id='test_client_order_id_small_price',
-            product_id='DOGE-USD',
-            base_size='10',
-            limit_price='1',
-            post_only=True
-        )
-        self.mock_logger_instance.info.assert_called_with('Limit buy order placed successfully for DOGE-USD. Order ID: test_order_id_small_price')
-
-    def test_limit_order_buy_api_failure(self):
-        """Test API failure during limit buy order placement."""
-        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = {
-            'success': False,
-            'failure_reason': 'INSUFFICIENT_FUNDS'
-        }
-        client = self.CoinbaseClient()
-        result = client.limit_order_buy(product_id='BTC-USD', size='1000', price='50000')
-        self.assertIsNone(result)
-        self.mock_logger_instance.error.assert_called_with('Limit buy order failed for BTC-USD. Reason: INSUFFICIENT_FUNDS')
-
-    def test_limit_order_buy_invalid_price_non_positive(self):
-        """Test limit_order_buy with a non-positive price."""
-        client = self.CoinbaseClient()
-        # Test with a negative price
-        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
-            client.limit_order_buy(product_id='BTC-USD', size='0.1', price='-100')
-        self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_buy: -100.')
-
-        # Test with a zero price
-        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
-            client.limit_order_buy(product_id='BTC-USD', size='0.1', price='0')
-        self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_buy: 0.')
-
-    def test_limit_order_buy_invalid_price_non_numeric(self):
-        """Test limit_order_buy with a non-numeric price string."""
-        client = self.CoinbaseClient()
-        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
-            client.limit_order_buy(product_id='BTC-USD', size='0.1', price='not-a-price')
-        self.mock_logger_instance.error.assert_called_with("Invalid price format for limit_order_buy: not-a-price. Not a valid number string.")
-
-    def test_limit_order_sell_invalid_price_non_positive(self):
-        """Test limit_order_sell with a non-positive price."""
-        client = self.CoinbaseClient()
-        # Test with a negative price
-        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
-            client.limit_order_sell(product_id='BTC-USD', size='0.1', price='-100')
-        self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_sell: -100.')
-
-        # Test with a zero price
-        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
-            client.limit_order_sell(product_id='BTC-USD', size='0.1', price='0')
-        self.mock_logger_instance.error.assert_called_with('Non-positive price for limit_order_sell: 0.')
-
-    def test_limit_order_sell_invalid_price_non_numeric(self):
-        """Test limit_order_sell with a non-numeric price string."""
-        client = self.CoinbaseClient()
-        with self.assertRaisesRegex(ValueError, "^price must be a string representing a positive number.$"):
-            client.limit_order_sell(product_id='BTC-USD', size='0.1', price='not-a-price')
-        self.mock_logger_instance.error.assert_called_with("Invalid price format for limit_order_sell: not-a-price. Not a valid number string.")
-
-    def test_limit_order_buy_http_error(self):
-        """Test limit_order_buy handles HTTPError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = 'Server Error'
-        http_error = HTTPError('Server Error')
-        http_error.response = mock_response
-
-        self.mock_rest_client_instance.limit_order_gtc_buy.side_effect = http_error
-        client = self.CoinbaseClient()
-        result = client.limit_order_buy(product_id='BTC-USD', size='0.1', price='50000')
+        self.mock_rest_client_instance.get_product_book.return_value = {'data': {}}
+        client = CoinbaseClient()
+        result = client.get_product_book(product_id='BTC-USD')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            'HTTP error placing limit buy order for BTC-USD: 500 Server Error',
+            "An unexpected error occurred while retrieving order book for BTC-USD: 'pricebook' key missing in response.",
             exc_info=True
         )
 
-    def test_limit_order_buy_invalid_size_type(self):
-        """Test limit_order_buy with a non-string size."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(ValueError) as cm:
-            client.limit_order_buy(product_id='BTC-USD', size=123, price='50000')
-        self.assertEqual(str(cm.exception), 'size must be a string representing a positive number.')
-        self.mock_logger_instance.error.assert_called_with("Invalid size type for limit_order_buy: <class 'int'>. Must be a string.")
-
-    def test_limit_order_buy_invalid_price_format(self):
-        """Test limit_order_buy with a non-numeric string price."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(ValueError) as cm:
-            client.limit_order_buy(product_id='BTC-USD', size='0.1', price='invalid')
-        self.assertEqual(str(cm.exception), 'price must be a string representing a positive number.')
-        self.mock_logger_instance.error.assert_called_with("Invalid price format for limit_order_buy: invalid. Not a valid number string.")
-
-    # Tests for limit_order_sell
-    def test_limit_order_sell_success(self):
-        """Test successful placement of a limit sell order."""
-        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = {
-            'success': True,
-            'order_id': 'test_sell_order_id_123'
-        }
-        client = self.CoinbaseClient()
-        with patch.object(client, '_generate_client_order_id', return_value='test_client_sell_id_456'):
-            result = client.limit_order_sell(product_id='BTC-USD', size='0.1', price='51000')
-
-        self.assertIsNotNone(result)
-        self.assertTrue(result['success'])
-        self.assertEqual(result['order_id'], 'test_sell_order_id_123')
-        self.mock_rest_client_instance.limit_order_gtc_sell.assert_called_once_with(
-            client_order_id='test_client_sell_id_456',
-            product_id='BTC-USD',
-            base_size='0.1',
-            limit_price='51000',
-            post_only=True
-        )
-        self.mock_logger_instance.info.assert_called_with('Limit sell order placed successfully for BTC-USD. Order ID: test_sell_order_id_123')
-
-    def test_limit_order_sell_success_small_price(self):
-        """Test successful placement of a limit sell order with a small price."""
-        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = {
-            'success': True,
-            'order_id': 'test_sell_order_id_small_price'
-        }
-        client = self.CoinbaseClient()
-        with patch.object(client, '_generate_client_order_id', return_value='test_client_sell_id_small_price'):
-            result = client.limit_order_sell(product_id='DOGE-USD', size='10', price='1')
-
-        self.assertIsNotNone(result)
-        self.assertTrue(result['success'])
-        self.assertEqual(result['order_id'], 'test_sell_order_id_small_price')
-        self.mock_rest_client_instance.limit_order_gtc_sell.assert_called_once_with(
-            client_order_id='test_client_sell_id_small_price',
-            product_id='DOGE-USD',
-            base_size='10',
-            limit_price='1',
-            post_only=True
-        )
-        self.mock_logger_instance.info.assert_called_with('Limit sell order placed successfully for DOGE-USD. Order ID: test_sell_order_id_small_price')
-
-    def test_limit_order_sell_api_failure(self):
-        """Test API failure during limit sell order placement."""
-        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = {
-            'success': False,
-            'failure_reason': 'PRODUCT_NOT_FOUND'
-        }
-        client = self.CoinbaseClient()
-        result = client.limit_order_sell(product_id='FAKE-COIN', size='10', price='100')
-        self.assertIsNone(result)
-        self.mock_logger_instance.error.assert_called_with('Limit sell order failed for FAKE-COIN. Reason: PRODUCT_NOT_FOUND')
-
-    def test_limit_order_sell_invalid_size(self):
-        """Test limit_order_sell with an invalid size (e.g., zero)."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(ValueError) as cm:
-            client.limit_order_sell(product_id='BTC-USD', size='0', price='51000')
-        self.assertEqual(str(cm.exception), 'size must be a string representing a positive number.')
-        self.mock_logger_instance.error.assert_called_with('Non-positive size for limit_order_sell: 0.')
-
-    def test_limit_order_sell_http_error(self):
-        """Test limit_order_sell handles HTTPError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 400
-        mock_response.text = 'Bad Request'
-        http_error = HTTPError('Bad Request')
-        http_error.response = mock_response
-
-        self.mock_rest_client_instance.limit_order_gtc_sell.side_effect = http_error
-        client = self.CoinbaseClient()
-        result = client.limit_order_sell(product_id='BTC-USD', size='0.1', price='51000')
+    def test_get_product_book_malformed_response_pricebook_not_dict(self):
+        """Test get_product_book handles a response where 'pricebook' is not a dict."""
+        self.mock_rest_client_instance.get_product_book.return_value = {'pricebook': 'not_a_dict'}
+        client = CoinbaseClient()
+        result = client.get_product_book(product_id='BTC-USD')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            'HTTP error placing limit sell order for BTC-USD: 400 Bad Request',
+            "An unexpected error occurred while retrieving order book for BTC-USD: 'pricebook' must be a dictionary.",
             exc_info=True
         )
 
-    def test_limit_order_sell_request_exception(self):
-        """Test limit_order_sell handles RequestException."""
-        self.mock_rest_client_instance.limit_order_gtc_sell.side_effect = RequestException('Network Error')
-        client = self.CoinbaseClient()
-        result = client.limit_order_sell(product_id='BTC-USD', size='0.1', price='51000')
+    # --- Test get_product ---
+
+    def test_get_product_success(self):
+        """Test successful retrieval of a product."""
+        mock_product = {'product_id': 'BTC-USD'}
+        self.mock_rest_client_instance.get_product.return_value = mock_product
+        client = CoinbaseClient()
+        product = client.get_product("BTC-USD")
+        self.assertEqual(product, mock_product)
+        self.mock_logger_instance.info.assert_called_with("Successfully retrieved product details for BTC-USD.")
+
+    def test_get_product_error_handling(self):
+        """Test all error handling for get_product."""
+        api_args = {'product_id': 'BTC-USD'}
+        self._test_api_call_http_error('get_product', api_args, f"Network error retrieving product BTC-USD: {self.mock_http_error}")
+        self._test_api_call_request_exception('get_product', api_args, f"Network error retrieving product BTC-USD: {self.mock_request_exception}")
+        self._test_api_call_unexpected_error('get_product', api_args, "An unexpected error occurred while retrieving product BTC-USD: Chaos")
+
+    def test_get_product_malformed_response_not_dict(self):
+        """Test get_product handles a response that is not a dictionary."""
+        self.mock_rest_client_instance.get_product.return_value = "not_a_dict"
+        client = CoinbaseClient()
+        result = client.get_product(product_id='BTC-USD')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            'Request exception placing limit sell order for BTC-USD: Network Error',
+            "An unexpected error occurred while retrieving product BTC-USD: get_product response should be a dictionary.",
             exc_info=True
         )
 
-    def test_limit_order_sell_invalid_price_type(self):
-        """Test limit_order_sell with a non-string price."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(ValueError) as cm:
-            client.limit_order_sell(product_id='BTC-USD', size='0.1', price=51000)
-        self.assertEqual(str(cm.exception), 'price must be a string representing a positive number.')
-        self.mock_logger_instance.error.assert_called_with("Invalid price type for limit_order_sell: <class 'int'>. Must be a string.")
-
-    def test_limit_order_sell_invalid_size_format(self):
-        """Test limit_order_sell with a non-numeric string size."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(ValueError) as cm:
-            client.limit_order_sell(product_id='BTC-USD', size='abc', price='51000')
-        self.assertEqual(str(cm.exception), 'size must be a string representing a positive number.')
-        self.mock_logger_instance.error.assert_called_with("Invalid size format for limit_order_sell: abc. Not a valid number string.")
-
-    # Tests for cancel_orders
-    def test_cancel_orders_success_and_failure_mix(self):
-        """Test cancelling a mix of successful and failed orders in one batch."""
-        self.mock_rest_client_instance.cancel_orders.return_value = {
-            'results': [
-                {'success': True, 'order_id': 'order_1', 'failure_reason': None},
-                {'success': False, 'order_id': 'order_2', 'failure_reason': 'NOT_FOUND'}
-            ]
-        }
-        client = self.CoinbaseClient()
-        result = client.cancel_orders(order_ids=['order_1', 'order_2'])
-
-        self.assertIsNotNone(result)
-        self.assertEqual(len(result['results']), 2)
-        # Check logs for both success and failure
-        self.mock_logger_instance.info.assert_any_call('Order order_1 cancelled successfully.')
-        self.mock_logger_instance.error.assert_any_call('Failed to cancel order order_2. Reason: NOT_FOUND')
-
-    def test_cancel_orders_malformed_response(self):
-        """Test cancel_orders with a response missing the 'results' key."""
-        self.mock_rest_client_instance.cancel_orders.return_value = {'status': 'error'}
-        client = self.CoinbaseClient()
-        client.cancel_orders(order_ids=['order_1'])
-        self.mock_logger_instance.warning.assert_called_with(
-            "Cancel orders response format not as expected or indicates general failure: {'status': 'error'}"
-        )
-
-    def test_cancel_orders_invalid_input(self):
-        """Test cancel_orders with invalid input (e.g., empty list)."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(AssertionError) as cm:
-            client.cancel_orders(order_ids=[])
-        self.assertEqual(str(cm.exception), 'order_ids list cannot be empty.')
-
-    def test_cancel_orders_http_error(self):
-        """Test cancel_orders handles HTTPError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 503
-        mock_response.text = 'Service Unavailable'
-        http_error = HTTPError('Service Unavailable')
-        http_error.response = mock_response
-
-        self.mock_rest_client_instance.cancel_orders.side_effect = http_error
-        client = self.CoinbaseClient()
-        result = client.cancel_orders(order_ids=['order_1'])
+    def test_get_product_malformed_response_no_product_key(self):
+        """Test get_product handles a response missing the 'product' key."""
+        self.mock_rest_client_instance.get_product.return_value = {'data': {}}
+        client = CoinbaseClient()
+        result = client.get_product(product_id='BTC-USD')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "HTTP error cancelling orders ['order_1']: 503 Service Unavailable",
+            "An unexpected error occurred while retrieving product BTC-USD: 'product_id' missing from product data.",
             exc_info=True
         )
 
-    def test_cancel_orders_request_exception(self):
-        """Test cancel_orders handles RequestException."""
-        self.mock_rest_client_instance.cancel_orders.side_effect = RequestException('Timeout')
-        client = self.CoinbaseClient()
-        result = client.cancel_orders(order_ids=['order_1'])
+    def test_get_product_malformed_response_product_not_dict(self):
+        """Test get_product handles a response where 'product' is not a dict."""
+        self.mock_rest_client_instance.get_product.return_value = {'product': 'not_a_dict'}
+        client = CoinbaseClient()
+        result = client.get_product(product_id='BTC-USD')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Request exception cancelling orders ['order_1']: Timeout",
+            "An unexpected error occurred while retrieving product BTC-USD: 'product_id' missing from product data.",
             exc_info=True
         )
 
-    def test_cancel_orders_unexpected_exception(self):
-        """Test cancel_orders handles a generic Exception."""
-        self.mock_rest_client_instance.cancel_orders.side_effect = Exception('Something broke')
-        client = self.CoinbaseClient()
-        result = client.cancel_orders(order_ids=['order_1'])
+    # --- Test limit_order ---
+
+    def test_limit_order_success(self):
+        """Test successful placement of a limit order."""
+        self.mock_rest_client_instance.limit_order_buy.return_value = {'success': True, 'order_id': 'order-123'}
+        client = CoinbaseClient()
+        response = client.limit_order(side="BUY", product_id="BTC-USD", size="1", price="10000")
+        self.assertIsNotNone(response)
+        self.assertTrue(response['success'])
+        self.assertEqual(response['order_id'], 'order-123')
+        self.mock_logger_instance.info.assert_called_with("Successfully placed limit buy order order-123.")
+        self.mock_rest_client_instance.limit_order_buy.assert_called_with(
+            client_order_id=ANY,
+            product_id="BTC-USD",
+            base_size="1",
+            limit_price="10000"
+        )
+
+    def test_limit_order_failure(self):
+        """Test failed placement of a limit order."""
+        self.mock_rest_client_instance.limit_order_sell.return_value = {'success': False, 'failure_reason': 'Insufficient funds'}
+        client = CoinbaseClient()
+        response = client.limit_order(side="SELL", product_id="BTC-USD", size="1", price="10000")
+        self.assertIsNotNone(response)
+        self.assertFalse(response['success'])
+        self.assertEqual(response['failure_reason'], 'Insufficient funds')
+        self.mock_logger_instance.error.assert_called_with("Failed to place limit sell order for BTC-USD. Reason: Insufficient funds")
+        self.mock_rest_client_instance.limit_order_sell.assert_called_with(
+            client_order_id=ANY,
+            product_id="BTC-USD",
+            base_size="1",
+            limit_price="10000"
+        )
+
+    def test_limit_order_error_handling(self):
+        """Test all error handling for limit_order."""
+        # Test HTTPError
+        self.mock_rest_client_instance.limit_order_buy.side_effect = self.mock_http_error
+        client = CoinbaseClient()
+        result = client.limit_order(side='BUY', product_id='BTC-USD', size='1', price='10000')
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(f"Network error on limit buy for BTC-USD: {self.mock_http_error}", exc_info=True)
+
+        # Test RequestException
+        self.mock_rest_client_instance.limit_order_sell.side_effect = self.mock_request_exception
+        result = client.limit_order(side='SELL', product_id='BTC-USD', size='1', price='10000')
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(f"Network error on limit sell for BTC-USD: {self.mock_request_exception}", exc_info=True)
+
+        # Test Unexpected Error
+        self.mock_rest_client_instance.limit_order_buy.side_effect = Exception("Chaos")
+        result = client.limit_order(side='BUY', product_id='BTC-USD', size='1', price='10000')
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with("An unexpected error occurred on limit buy for BTC-USD: Chaos", exc_info=True)
+
+    def test_limit_order_malformed_response_not_dict(self):
+        """Test limit_order handles a response that is not a dictionary."""
+        self.mock_rest_client_instance.limit_order_buy.return_value = "not_a_dict"
+        client = CoinbaseClient()
+        result = client.limit_order(side="BUY", product_id="BTC-USD", size="1", price="10000")
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An unexpected error occurred while cancelling orders ['order_1']: Something broke",
+            "An unexpected error occurred on limit buy for BTC-USD: limit_order_buy response should be a dictionary.",
             exc_info=True
         )
 
-    def test_cancel_orders_no_results_key_success(self):
-        """Test cancel_orders with a response that has success: True but no 'results' key."""
-        self.mock_rest_client_instance.cancel_orders.return_value = {'success': True}
-        client = self.CoinbaseClient()
-        client.cancel_orders(order_ids=['order_1'])
-        self.mock_logger_instance.info.assert_called_with(
-            "Cancel orders request appears successful at a high level for orders: ['order_1']"
-        )
+    # --- Test get_order ---
 
-    # Tests for get_order
     def test_get_order_success(self):
-        """Test successful retrieval of a single order."""
-        mock_order_data = {'order_id': 'test_order_1', 'status': 'FILLED'}
-        mock_response = MagicMock()
-        mock_response.order = mock_order_data
-        self.mock_rest_client_instance.get_order.return_value = mock_response
+        """Test successful retrieval of an order."""
+        mock_order = {'order_id': 'order-123'}
+        self.mock_rest_client_instance.get_order.return_value = {'order': mock_order}
+        client = CoinbaseClient()
+        order = client.get_order('order-123')
+        self.assertEqual(order, mock_order)
+        self.mock_logger_instance.info.assert_called_with("Successfully retrieved order order-123.")
 
-        client = self.CoinbaseClient()
-        result = client.get_order(order_id='test_order_1')
+    def test_get_order_error_handling(self):
+        """Test all error handling for get_order."""
+        api_args = {'order_id': 'order-123'}
+        self._test_api_call_http_error('get_order', api_args, f"Network error retrieving order order-123: {self.mock_http_error}")
+        self._test_api_call_request_exception('get_order', api_args, f"Network error retrieving order order-123: {self.mock_request_exception}")
+        self._test_api_call_unexpected_error('get_order', api_args, "An unexpected error occurred while retrieving order order-123: Chaos")
 
-        self.assertEqual(result, mock_order_data)
-        self.mock_rest_client_instance.get_order.assert_called_once_with(order_id='test_order_1')
-        self.mock_logger_instance.info.assert_called_with('Successfully retrieved order test_order_1.')
-
-    def test_get_order_not_found(self):
-        """Test get_order for a non-existent order (HTTP 404)."""
-        mock_http_response = MagicMock()
-        mock_http_response.status_code = 404
-        mock_http_response.text = 'Order not found'
-        http_error = HTTPError('Not Found')
-        http_error.response = mock_http_response
-
-        self.mock_rest_client_instance.get_order.side_effect = http_error
-        client = self.CoinbaseClient()
-        result = client.get_order(order_id='non_existent_order')
-
+    def test_get_order_malformed_response_not_dict(self):
+        """Test get_order handles a response that is not a dictionary."""
+        self.mock_rest_client_instance.get_order.return_value = "not_a_dict"
+        client = CoinbaseClient()
+        result = client.get_order(order_id='order-123')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "HTTP error retrieving order non_existent_order: 404 Order not found",
+            "An unexpected error occurred while retrieving order order-123: get_order response should be a dictionary.",
             exc_info=True
         )
 
-    def test_get_order_malformed_response(self):
-        """Test get_order with a response missing the 'order' attribute."""
-        self.mock_rest_client_instance.get_order.return_value = {'unexpected': 'data'}
-        client = self.CoinbaseClient()
-        result = client.get_order(order_id='test_order_1')
-
-        self.assertIsNone(result)
-        self.mock_logger_instance.warning.assert_called_with(
-            "Received unexpected format for order data: <class 'dict'>"
-        )
-
-    def test_get_order_request_exception(self):
-        """Test get_order handles RequestException."""
-        self.mock_rest_client_instance.get_order.side_effect = RequestException('Connection failed')
-        client = self.CoinbaseClient()
-        result = client.get_order(order_id='test_order_1')
-
+    def test_get_order_malformed_response_no_order_key(self):
+        """Test get_order handles a response missing the 'order' key."""
+        self.mock_rest_client_instance.get_order.return_value = {'data': {}}
+        client = CoinbaseClient()
+        result = client.get_order(order_id='order-123')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Request exception retrieving order test_order_1: Connection failed",
+            "An unexpected error occurred while retrieving order order-123: 'order' key missing in response.",
             exc_info=True
         )
 
-    def test_get_order_unexpected_exception(self):
-        """Test get_order handles a generic Exception."""
-        self.mock_rest_client_instance.get_order.side_effect = Exception('Generic error')
-        client = self.CoinbaseClient()
-        result = client.get_order(order_id='test_order_1')
-
+    def test_get_order_malformed_response_order_not_dict(self):
+        """Test get_order handles a response where 'order' is not a dict."""
+        self.mock_rest_client_instance.get_order.return_value = {'order': 'not_a_dict'}
+        client = CoinbaseClient()
+        result = client.get_order(order_id='order-123')
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An unexpected error occurred while retrieving order test_order_1: Generic error",
+            "An unexpected error occurred while retrieving order order-123: 'order' must be a dictionary.",
             exc_info=True
         )
 
-    def test_get_order_invalid_id(self):
-        """Test get_order with an invalid order_id (empty string)."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(AssertionError) as cm:
-            client.get_order(order_id='')
-        self.assertEqual(str(cm.exception), 'order_id must be a non-empty string.')
+    # --- Test cancel_orders ---
 
-    def test_get_product_candles_http_error(self):
-        """Test get_product_candles handles HTTPError."""
-        mock_response = MagicMock()
-        mock_response.status_code = 400
-        mock_response.text = "Bad Request"
-        http_error = HTTPError(response=mock_response)
-        self.mock_rest_client_instance.get_public_candles.side_effect = http_error
-        client = self.CoinbaseClient()
-        candles = client.get_product_candles("BTC-USD", "15_MINUTE")
-        self.assertIsNone(candles)
-        self.mock_logger_instance.error.assert_called_with(
-            f"HTTP error retrieving candles for BTC-USD: {mock_response.status_code} {mock_response.text}",
-            exc_info=True,
-        )
-
-    def test_get_product_candles_request_exception(self):
-        """Test get_product_candles handles RequestException."""
-        request_exception = RequestException("Connection timeout")
-        self.mock_rest_client_instance.get_public_candles.side_effect = request_exception
-        client = self.CoinbaseClient()
-        candles = client.get_product_candles("BTC-USD", "15_MINUTE")
-        self.assertIsNone(candles)
-        self.mock_logger_instance.error.assert_called_with(
-            f"Request exception retrieving candles for BTC-USD: {request_exception}",
-            exc_info=True,
-        )
-
-    def test_get_product_candles_no_candles_key(self):
-        """Test get_product_candles handles a response missing the 'candles' key."""
-        self.mock_rest_client_instance.get_public_candles.return_value = {"data": "no candles here"}
-        client = self.CoinbaseClient()
-        candles = client.get_product_candles("BTC-USD", "15_MINUTE")
-        self.assertIsNone(candles)
-        self.mock_logger_instance.warning.assert_called_with(
-            "get_product_candles for BTC-USD response format not recognized or key data missing: {'data': 'no candles here'}"
-        )
-
-    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
-    def test_limit_order_buy_success(self, mock_generate_id):
-        """Test a successful limit buy order."""
-        client_order_id = "test_client_order_id_buy_success"
-        mock_generate_id.return_value = client_order_id
-        product_id = "BTC-USD"
-        base_size = "0.001"
-        limit_price = "30000.00"
-        api_response = {"success": True, "order_id": "buy_order_id_1"}
-        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = api_response
-
-        expected_response = {
-            "success": True,
-            "order_id": "buy_order_id_1",
-            "client_order_id": client_order_id,
-            "product_id": product_id,
-            "side": "BUY",
-            "size": base_size,
-            "price": limit_price,
-        }
-
-        client = self.CoinbaseClient()
-        response = client.limit_order_buy(product_id, base_size, limit_price)
-        self.assertEqual(response, expected_response)
-        self.mock_rest_client_instance.limit_order_gtc_buy.assert_called_once()
-        self.mock_logger_instance.info.assert_any_call(
-            f"Limit buy order placed successfully for {product_id}. Order ID: {api_response.get('order_id')}"
-        )
-
-    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
-    def test_limit_order_buy_api_failure(self, mock_generate_id):
-        """Test a failed limit buy order due to an API error."""
-        mock_generate_id.return_value = "test_client_order_id_buy_fail"
-        product_id = "BTC-USD"
-        base_size = "0.001"
-        limit_price = "30000.00"
-        error_response = {
-            "success": False,
-            "error_response": {"message": "Insufficient funds"},
-        }
-        self.mock_rest_client_instance.limit_order_gtc_buy.return_value = error_response
-        client = self.CoinbaseClient()
-        response = client.limit_order_buy(product_id, base_size, limit_price)
-        self.assertIsNone(response)
-        self.mock_logger_instance.error.assert_any_call(
-            f"Limit buy order failed for {product_id}. Reason: Insufficient funds"
-        )
-
-    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
-    def test_limit_order_sell_success(self, mock_generate_id):
-        """Test a successful limit sell order."""
-        client_order_id = "test_client_order_id_sell_success"
-        mock_generate_id.return_value = client_order_id
-        product_id = "BTC-USD"
-        base_size = "0.001"
-        limit_price = "31000.00"
-        api_response = {"success": True, "order_id": "sell_order_id_1"}
-        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = api_response
-
-        expected_response = {
-            "success": True,
-            "order_id": "sell_order_id_1",
-            "client_order_id": client_order_id,
-            "product_id": product_id,
-            "side": "SELL",
-            "size": base_size,
-            "price": limit_price,
-        }
-
-        client = self.CoinbaseClient()
-        response = client.limit_order_sell(product_id, base_size, limit_price)
-        self.assertEqual(response, expected_response)
-        self.mock_rest_client_instance.limit_order_gtc_sell.assert_called_once()
-        self.mock_logger_instance.info.assert_any_call(
-            f"Limit sell order placed successfully for {product_id}. Order ID: {api_response.get('order_id')}"
-        )
-
-    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
-    def test_limit_order_sell_api_failure(self, mock_generate_id):
-        """Test a failed limit sell order due to an API error."""
-        mock_generate_id.return_value = "test_client_order_id_sell_fail"
-        product_id = "BTC-USD"
-        base_size = "0.001"
-        limit_price = "31000.00"
-        error_response = {
-            "success": False,
-            "error_response": {"message": "Invalid product"},
-        }
-        self.mock_rest_client_instance.limit_order_gtc_sell.return_value = error_response
-        client = self.CoinbaseClient()
-        response = client.limit_order_sell(product_id, base_size, limit_price)
-        self.assertIsNone(response)
-        self.mock_logger_instance.error.assert_any_call(
-            f"Limit sell order failed for {product_id}. Reason: Invalid product"
-        )
-
-    @patch("coinbase_client.CoinbaseClient._generate_client_order_id")
-    def test_limit_order_sell_api_exception(self, mock_generate_id):
-        """Test limit sell order handles API exceptions."""
-        mock_generate_id.return_value = "test_client_order_id_sell_fail"
-        product_id = "BTC-USD"
-        base_size = "0.001"
-        limit_price = "31000.00"
-        self.mock_rest_client_instance.limit_order_gtc_sell.side_effect = Exception(
-            "Sell Order API Error"
-        )
-
-        client = self.CoinbaseClient()
-        response = client.limit_order_sell(
-            product_id, base_size, limit_price
-        )
-        self.assertIsNone(response)
-        self.mock_logger_instance.error.assert_any_call(
-            f"An unexpected error occurred while placing limit sell order for {product_id}: Sell Order API Error",
-            exc_info=True,
-        )
-
-    # --- Tests for cancel_orders ---
     def test_cancel_orders_success(self):
-        """Test successful order cancellation."""
-        order_ids = ["order1", "order2"]
-        expected_response = {
-            "results": [
-                {"success": True, "order_id": "order1"},
-                {"success": False, "order_id": "order2"},
+        """Test successful cancellation of orders."""
+        order_ids = ['order1', 'order2']
+        response_data = {'results': [{'success': True, 'order_id': 'order1'}, {'success': True, 'order_id': 'order2'}]}
+        self.mock_rest_client_instance.cancel_orders.return_value = response_data
+        client = CoinbaseClient()
+        response = client.cancel_orders(order_ids)
+        self.assertEqual(response, response_data)
+        self.mock_logger_instance.info.assert_has_calls([
+            call("Successfully cancelled order order1."),
+            call("Successfully cancelled order order2.")
+        ])
+
+    def test_cancel_orders_partial_failure(self):
+        """Test partial failure when cancelling multiple orders."""
+        response_data = {
+            'results': [
+                {'success': True, 'order_id': 'order-123'},
+                {'success': False, 'order_id': 'order-456', 'failure_reason': 'Order not found'}
             ]
         }
-        self.mock_rest_client_instance.cancel_orders.return_value = expected_response
+        self.mock_rest_client_instance.cancel_orders.return_value = response_data
+        client = CoinbaseClient()
+        response = client.cancel_orders(order_ids=['order-123', 'order-456'])
+        self.assertIsNotNone(response)
+        self.assertEqual(len(response['results']), 2)
+        self.mock_logger_instance.info.assert_any_call("Successfully cancelled order order-123.")
+        self.mock_logger_instance.error.assert_called_with("Failed to cancel order order-456. Reason: Order not found")
 
-        client = self.CoinbaseClient()
-        response = client.cancel_orders(order_ids)
-        self.assertEqual(response, expected_response)
-        self.mock_rest_client_instance.cancel_orders.assert_called_once_with(
-            order_ids=order_ids
-        )
-        calls = [
-            call(f"Attempting to cancel orders: {order_ids}"),
-            call(f"Cancel orders response: {expected_response}"),
-            call(
-                f"Successfully processed cancel_orders request for {len(order_ids)} order(s). Checking individual results."
-            ),
-            call("Order order1 cancelled successfully."),
-        ]
-        self.mock_logger_instance.info.assert_has_calls(calls, any_order=False)
-        self.mock_logger_instance.error.assert_any_call(
-            "Failed to cancel order order2. Reason: Unknown reason"
-        )
+    def test_cancel_orders_error_handling(self):
+        """Test all error handling for cancel_orders."""
+        api_args = {'order_ids': ['order-123']}
+        self._test_api_call_http_error('cancel_orders', api_args, f"Network error cancelling orders {api_args['order_ids']}: {self.mock_http_error}")
+        self._test_api_call_request_exception('cancel_orders', api_args, f"Network error cancelling orders {api_args['order_ids']}: {self.mock_request_exception}")
+        self._test_api_call_unexpected_error('cancel_orders', api_args, "An unexpected error occurred while cancelling orders ['order-123']: Chaos")
 
-    def test_cancel_orders_api_exception(self):
-        """Test cancel_orders handles API exceptions."""
-        order_ids = ["order_err1"]
-        self.mock_rest_client_instance.cancel_orders.side_effect = Exception(
-            "Cancel API Error"
+    def test_cancel_orders_malformed_response_not_dict(self):
+        """Test cancel_orders handles a response that is not a dictionary."""
+        self.mock_rest_client_instance.cancel_orders.return_value = "not_a_dict"
+        client = CoinbaseClient()
+        result = client.cancel_orders(order_ids=['order-123'])
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while cancelling orders ['order-123']: cancel_orders response should be a dictionary.",
+            exc_info=True
         )
 
-        client = self.CoinbaseClient()
-        response = client.cancel_orders(order_ids)
-        self.assertIsNone(response)
-        self.mock_logger_instance.error.assert_any_call(
-            f"An unexpected error occurred while cancelling orders {order_ids}: Cancel API Error",
-            exc_info=True,
+    def test_cancel_orders_malformed_response_results_not_list(self):
+        """Test cancel_orders handles a response where 'results' is not a list."""
+        self.mock_rest_client_instance.cancel_orders.return_value = {'results': 'not_a_list'}
+        client = CoinbaseClient()
+        result = client.cancel_orders(order_ids=['order-123'])
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while cancelling orders ['order-123']: 'results' key should be a list.",
+            exc_info=True
         )
 
-    def test_cancel_orders_empty_list(self):
-        """Test cancel_orders with an empty list of orders."""
-        client = self.CoinbaseClient()
-        with self.assertRaises(AssertionError):
-            client.cancel_orders([])
-        self.mock_rest_client_instance.cancel_orders.assert_not_called()
+    def test_cancel_orders_malformed_response_results_item_not_dict(self):
+        """Test cancel_orders handles a response where an item in 'results' is not a dict."""
+        self.mock_rest_client_instance.cancel_orders.return_value = {'results': ['not_a_dict']}
+        client = CoinbaseClient()
+        result = client.cancel_orders(order_ids=['order-123'])
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_with(
+            "An unexpected error occurred while cancelling orders ['order-123']: Each item in 'results' should be a dictionary.",
+            exc_info=True
+        )
+
+    def test_cancel_orders_malformed_response_no_results_or_success(self):
+        """Test cancel_orders handles a response with no 'results' or 'success' key."""
+        response_data = {'other_key': 'some_value'}
+        self.mock_rest_client_instance.cancel_orders.return_value = response_data
+        client = CoinbaseClient()
+        result = client.cancel_orders(order_ids=['order-123'])
+        self.assertEqual(result, response_data)
+        self.mock_logger_instance.warning.assert_called_with(f"Cancel orders response format not as expected: {response_data}")
 
 
 if __name__ == "__main__":
