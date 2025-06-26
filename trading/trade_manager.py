@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any, Dict, Optional
+
+import pandas as pd
 from decimal import Decimal
 
 from trading.coinbase_client import CoinbaseClient
@@ -346,15 +348,23 @@ class TradeManager:
         try:
             # 1. Get candle data
             candles = self.client.get_product_candles(
-                asset_id, granularity=config_asset_params["granularity"]
+                asset_id, granularity=config_asset_params["candle_granularity_api_name"]
             )
             if not candles:
                 self.logger.warning(f"[{asset_id}] No candle data returned.")
                 return
 
+            # Convert to DataFrame for technical analysis
+            candles_df = pd.DataFrame(candles)
+
+            # Ensure correct data types for technical analysis
+            for col in ["open", "high", "low", "close", "volume"]:
+                if col in candles_df.columns:
+                    candles_df[col] = pd.to_numeric(candles_df[col])
+
             # 2. Calculate indicator (RSI)
             rsi_series = self.ta_module.calculate_rsi(
-                candles, period=config_asset_params["rsi_period"]
+                candles_df, period=config_asset_params["rsi_period"]
             )
             if rsi_series is None or rsi_series.empty:
                 self.logger.warning(f"[{asset_id}] RSI calculation failed.")

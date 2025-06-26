@@ -21,7 +21,6 @@ class CoinbaseClient:
         self,
         api_key: Optional[str] = None,
         api_secret: Optional[str] = None,
-        api_url: Optional[str] = None,
     ) -> None:
         """
         Initializes the CoinbaseClient.
@@ -29,11 +28,9 @@ class CoinbaseClient:
         Args:
             api_key (str, optional): The API key. Defaults to value in config.
             api_secret (str, optional): The API secret. Defaults to value in config.
-            api_url (str, optional): The API URL to use. Defaults to the production URL.
         """
         self.logger = logger.get_logger()
 
-        self.api_url = api_url or config.COINBASE_SANDBOX_API_URL
         self.api_key = api_key if api_key is not None else config.COINBASE_API_KEY
         self.api_secret = (
             api_secret if api_secret is not None else config.COINBASE_API_SECRET
@@ -50,11 +47,10 @@ class CoinbaseClient:
             self.client: Optional[RESTClient] = RESTClient(
                 api_key=self.api_key,
                 api_secret=self.api_secret,
-                base_url=self.api_url,
                 rate_limit_headers=True,
             )
             self.logger.info(
-                f"Coinbase RESTClient initialized successfully for {self.api_url} URL."
+                "Coinbase RESTClient initialized successfully for the live API."
             )
         except Exception as e:
             self.logger.error(
@@ -125,7 +121,7 @@ class CoinbaseClient:
             assert self.client is not None, "RESTClient not initialized."
             assert product_id, "Product ID must be a non-empty string."
 
-            response = self.client.get_product_candles(
+            response = self.client.get_public_candles(
                 product_id=product_id, start=start, end=end, granularity=granularity
             )
             response_dict = self._handle_api_response(response)
@@ -209,13 +205,15 @@ class CoinbaseClient:
                 assert isinstance(
                     response_dict, dict
                 ), "get_product response should be a dictionary."
-                product = response_dict.get("product")
 
-                assert product is not None, "'product' key missing from response."
-                assert isinstance(product, dict), "'product' must be a dictionary."
+                # The response from get_product is the product dictionary itself.
+                # There is no nested 'product' key.
+                assert (
+                    "product_id" in response_dict
+                ), "'product_id' key missing from response, indicating an invalid product response."
 
                 self.logger.info(f"Successfully retrieved product {product_id}.")
-                return product
+                return response_dict
 
             except (HTTPError, RequestException) as e:
                 if isinstance(e, HTTPError) and e.response.status_code >= 500:

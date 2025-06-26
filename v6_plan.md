@@ -139,7 +139,8 @@ This section tracks the progress of enhancing the `coinbase_client.py` module.
 *   [X] Run all linters (`mypy`, `black`, `flake8`, `bandit`) and address all reported issues.
 *   [X] Ensure all unit tests pass and aim for high test coverage.
 *   [X] Update/create a comprehensive `README.md` for setup, configuration, and execution.
-*   [X] Manually test the bot in a controlled environment if possible (e.g., with very small amounts or against a sandbox if available, though Coinbase Advanced Trade sandbox is limited).
+*   [X] Run `main.py` and validate the bot runs successfully in the live environment, fixing all runtime errors.
+*   [X] Add `pyproject.toml` and install in editable mode to resolve `ModuleNotFoundError` during test collection.
 
 ## V. Test Suite Refactoring & Stability (Completed)
 
@@ -321,8 +322,9 @@ v6/
 
 - **Step 1: Consolidate Code:** [X] All logic moved to `trading/`.
 - **Step 2: Update Imports:** [X] All application and test imports updated to be absolute (`from trading...`).
-- **Step 3: Commit Changes:** [ ] **CURRENT STEP:** Commit the refactoring work to version control.
-- **Step 4: Verify with Tests:** [ ] Run the full `pytest` suite to ensure no regressions.
-- **Step 5: Final Review:** [ ] Run static analysis tools (`mypy`, `flake8`, `bandit`).
+- **Step 3: Commit Changes:** [X] Commit the refactoring work to version control.
+- **Step 4: Run Bot (Smoke Test):** [X] Run the bot from the project root (`python -m trading.main`) to ensure it initializes and runs without crashing.
+- **Step 5: Verify with Tests:** [ ] **CURRENT STEP:** Run the full `pytest` suite to ensure no regressions.
+- **Step 6: Final Review:** [ ] Run static analysis tools (`mypy`, `flake8`, `bandit`).
 
 ---
