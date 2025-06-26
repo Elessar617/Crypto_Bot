@@ -1,6 +1,7 @@
 """Handles all interactions with the Coinbase Advanced Trade API."""
 
 import json
+import time
 import uuid
 from typing import Optional, Dict, Any, List
 
@@ -11,6 +12,7 @@ from coinbase.rest import RESTClient
 
 import config
 import logger
+import time
 
 
 class CoinbaseClient:
@@ -105,13 +107,10 @@ class CoinbaseClient:
             self.logger.info(f"Successfully retrieved {len(accounts)} accounts.")
             return accounts
         except (HTTPError, RequestException) as e:
-            self.logger.error(f"Network error retrieving accounts: {e}", exc_info=True)
+            self.logger.error(f"Assertion failed in get_accounts: {e}", exc_info=True)
             return None
         except Exception as e:
-            self.logger.error(
-                f"An unexpected error occurred while retrieving accounts: {e}",
-                exc_info=True,
-            )
+            self.logger.error(f"Assertion failed in get_accounts: {e}", exc_info=True)
             return None
 
     def get_product_candles(
@@ -146,12 +145,13 @@ class CoinbaseClient:
             return candles
         except (HTTPError, RequestException) as e:
             self.logger.error(
-                f"Network error retrieving candles for {product_id}: {e}", exc_info=True
+                f"Assertion failed in get_product_candles for {product_id}: {e}",
+                exc_info=True,
             )
             return None
         except Exception as e:
             self.logger.error(
-                f"An unexpected error occurred while retrieving candles for {product_id}: {e}",
+                f"Assertion failed in get_product_candles for {product_id}: {e}",
                 exc_info=True,
             )
             return None
@@ -180,49 +180,65 @@ class CoinbaseClient:
             return pricebook
         except (HTTPError, RequestException) as e:
             self.logger.error(
-                f"Network error retrieving order book for {product_id}: {e}",
+                f"Assertion failed in get_product_book for {product_id}: {e}",
                 exc_info=True,
             )
             return None
         except Exception as e:
             self.logger.error(
-                f"An unexpected error occurred while retrieving order book for {product_id}: {e}",
+                f"Assertion failed in get_product_book for {product_id}: {e}",
                 exc_info=True,
             )
             return None
 
     def get_product(self, product_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieves details for a single product."""
+        """Retrieves details for a single product with retry logic."""
         self.logger.debug(f"Attempting to retrieve product {product_id}.")
-        try:
-            assert self.client is not None, "RESTClient not initialized."
-            assert product_id, "Product ID must be a non-empty string."
+        max_retries = 3
+        retry_delay_seconds = 5
 
-            response = self.client.get_product(product_id=product_id)
-            product_details = self._handle_api_response(response)
+        for attempt in range(max_retries):
+            try:
+                assert self.client is not None, "RESTClient not initialized."
+                assert (
+                    isinstance(product_id, str) and product_id
+                ), "'product_id' cannot be empty."
 
-            assert isinstance(
-                product_details, dict
-            ), "get_product response should be a dictionary."
-            assert (
-                "product_id" in product_details
-            ), "'product_id' missing from product data."
+                response = self.client.get_product(product_id=product_id)
+                response_dict = self._handle_api_response(response)
 
-            self.logger.info(
-                f"Successfully retrieved product details for {product_id}."
-            )
-            return product_details
-        except (HTTPError, RequestException) as e:
-            self.logger.error(
-                f"Network error retrieving product {product_id}: {e}", exc_info=True
-            )
-            return None
-        except Exception as e:
-            self.logger.error(
-                f"An unexpected error occurred while retrieving product {product_id}: {e}",
-                exc_info=True,
-            )
-            return None
+                assert isinstance(
+                    response_dict, dict
+                ), "get_product response should be a dictionary."
+                product = response_dict.get("product")
+
+                assert product is not None, "'product' key missing from response."
+                assert isinstance(product, dict), "'product' must be a dictionary."
+
+                self.logger.info(f"Successfully retrieved product {product_id}.")
+                return product
+
+            except (HTTPError, RequestException) as e:
+                if isinstance(e, HTTPError) and e.response.status_code >= 500:
+                    self.logger.warning(
+                        f"Attempt {attempt + 1} of {max_retries} failed for {product_id} with server error: {e}. Retrying in {retry_delay_seconds}s..."
+                    )
+                    time.sleep(retry_delay_seconds)
+                    continue
+                self.logger.error(
+                    f"Assertion failed in get_product for {product_id}: {e}",
+                    exc_info=True,
+                )
+                return None
+            except Exception as e:
+                self.logger.error(
+                    f"An unexpected error occurred in get_product for {product_id}: {e}",
+                    exc_info=True,
+                )
+                return None
+
+        self.logger.error(f"Failed to retrieve product {product_id} after {max_retries} attempts.")
+        return None
 
     def limit_order(
         self,
@@ -273,13 +289,13 @@ class CoinbaseClient:
             return response_dict
         except (HTTPError, RequestException) as e:
             self.logger.error(
-                f"Network error on limit {side.lower()} for {product_id}: {e}",
+                f"Assertion failed in limit_order for {product_id}: {e}",
                 exc_info=True,
             )
             return None
         except Exception as e:
             self.logger.error(
-                f"An unexpected error occurred on limit {side.lower()} for {product_id}: {e}",
+                f"Assertion failed in limit_order for {product_id}: {e}",
                 exc_info=True,
             )
             return None
@@ -338,13 +354,12 @@ class CoinbaseClient:
             return order_details
         except (HTTPError, RequestException) as e:
             self.logger.error(
-                f"Network error retrieving order {order_id}: {e}", exc_info=True
+                f"Assertion failed in get_order for {order_id}: {e}", exc_info=True
             )
             return None
         except Exception as e:
             self.logger.error(
-                f"An unexpected error occurred while retrieving order {order_id}: {e}",
-                exc_info=True,
+                f"Assertion failed in get_order for {order_id}: {e}", exc_info=True
             )
             return None
 
@@ -391,12 +406,12 @@ class CoinbaseClient:
             return results
         except (HTTPError, RequestException) as e:
             self.logger.error(
-                f"Network error cancelling orders {order_ids}: {e}", exc_info=True
+                f"Assertion failed in cancel_orders for {order_ids}: {e}", exc_info=True
             )
             return None
         except Exception as e:
             self.logger.error(
-                f"An unexpected error occurred while cancelling orders {order_ids}: {e}",
+                f"Assertion failed in cancel_orders for {order_ids}: {e}",
                 exc_info=True,
             )
             return None
