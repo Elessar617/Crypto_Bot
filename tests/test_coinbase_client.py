@@ -186,8 +186,7 @@ class TestCoinbaseClient(unittest.TestCase):
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_accounts: RESTClient not initialized.",
-            exc_info=True,
+            "An error occurred in get_accounts: RESTClient not initialized.", exc_info=True
         )
 
     def test_get_accounts_success(self):
@@ -209,12 +208,12 @@ class TestCoinbaseClient(unittest.TestCase):
     def test_get_accounts_error_handling(self):
         """Test all error handling for get_accounts."""
         self.mock_logger_instance.reset_mock()
-        log_message = f"Assertion failed in get_accounts: {self.mock_http_error}"
+        log_message = f"An error occurred in get_accounts: {self.mock_http_error}"
         self._test_api_call_http_error("get_accounts", "get_accounts", {}, log_message)
 
         self.mock_logger_instance.reset_mock()
         log_message = (
-            f"Assertion failed in get_accounts: {self.mock_request_exception}"
+            f"An error occurred in get_accounts: {self.mock_request_exception}"
         )
         self._test_api_call_request_exception(
             "get_accounts", "get_accounts", {}, log_message
@@ -226,7 +225,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.get_accounts()
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_accounts: get_accounts response should be a dictionary.",
+            "An error occurred in get_accounts: get_accounts response should be a dictionary.",
             exc_info=True,
         )
 
@@ -236,7 +235,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.get_accounts()
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_accounts: 'accounts' key is missing in the response.",
+            "An error occurred in get_accounts: 'accounts' key is missing in the response.",
             exc_info=True,
         )
 
@@ -248,7 +247,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.get_accounts()
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_accounts: 'accounts' key should be a list.",
+            "An error occurred in get_accounts: 'accounts' key should be a list.",
             exc_info=True,
         )
 
@@ -262,7 +261,7 @@ class TestCoinbaseClient(unittest.TestCase):
             "Failed to decode JSON from response: %s", invalid_json_string
         )
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_accounts: get_accounts response should be a dictionary.",
+            "An error occurred in get_accounts: get_accounts response should be a dictionary.",
             exc_info=True,
         )
 
@@ -278,7 +277,7 @@ class TestCoinbaseClient(unittest.TestCase):
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_product_candles for BTC-USD: RESTClient not initialized.",
+            "An error occurred in get_product_candles for BTC-USD: RESTClient not initialized.",
             exc_info=True,
         )
 
@@ -288,7 +287,7 @@ class TestCoinbaseClient(unittest.TestCase):
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_product_candles for : Product ID must be a non-empty string.",
+            "An error occurred in get_product_candles for : Product ID must be a non-empty string.",
             exc_info=True,
         )
 
@@ -314,13 +313,13 @@ class TestCoinbaseClient(unittest.TestCase):
     def test_get_product_candles_error_handling(self):
         """Test all error handling for get_product_candles."""
         self.mock_logger_instance.reset_mock()
-        log_message = f"Assertion failed in get_product_candles for BTC-USD: {self.mock_http_error}"
+        log_message = f"An error occurred in get_product_candles for BTC-USD: {self.mock_http_error}"
         self._test_api_call_http_error(
             "get_product_candles", "get_product_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
         )
 
         self.mock_logger_instance.reset_mock()
-        log_message = f"Assertion failed in get_product_candles for BTC-USD: {self.mock_request_exception}"
+        log_message = f"An error occurred in get_product_candles for BTC-USD: {self.mock_request_exception}"
         self._test_api_call_request_exception(
             "get_product_candles", "get_product_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
         )
@@ -335,7 +334,7 @@ class TestCoinbaseClient(unittest.TestCase):
         )
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in get_product_candles for BTC-USD: 'candles' key must be a list.",
+            "An error occurred in get_product_candles for BTC-USD: 'candles' key must be a list.",
             exc_info=True,
         )
 
@@ -349,7 +348,7 @@ class TestCoinbaseClient(unittest.TestCase):
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_once_with(
-            "An unexpected error occurred in get_product for BTC-USD: RESTClient not initialized.",
+            "An error occurred in get_product for BTC-USD: RESTClient not initialized.",
             exc_info=True,
         )
 
@@ -375,7 +374,7 @@ class TestCoinbaseClient(unittest.TestCase):
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_once_with(
-            f"An unexpected error occurred in get_product for {product_id}: {error_message}",
+            f"An error occurred in get_product for {product_id}: {error_message}",
             exc_info=True,
         )
         # Ensure no retries were attempted for an unexpected error
@@ -404,7 +403,7 @@ class TestCoinbaseClient(unittest.TestCase):
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in limit_order for BTC-USD: RESTClient not initialized.",
+            "An error occurred in limit_order for BTC-USD: RESTClient not initialized.",
             exc_info=True,
         )
 
@@ -415,7 +414,7 @@ class TestCoinbaseClient(unittest.TestCase):
         )
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in limit_order for BTC-USD: Side must be 'BUY' or 'SELL'.",
+            "An error occurred in limit_order for BTC-USD: Side must be 'BUY' or 'SELL'.",
             exc_info=True,
         )
 
@@ -426,7 +425,7 @@ class TestCoinbaseClient(unittest.TestCase):
         )
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in limit_order for : Product ID must be a non-empty string.",
+            "An error occurred in limit_order for : Product ID must be a non-empty string.",
             exc_info=True,
         )
 
@@ -501,7 +500,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.get_order(order_id)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in get_order for {order_id}: get_order response should be a dictionary.",
+            f"An error occurred in get_order for {order_id}: get_order response should be a dictionary.",
             exc_info=True,
         )
 
@@ -512,7 +511,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.get_order(order_id)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in get_order for {order_id}: 'order' key missing in response.",
+            f"An error occurred in get_order for {order_id}: 'order' key missing in response.",
             exc_info=True,
         )
 
@@ -523,7 +522,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.get_order(order_id)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in get_order for {order_id}: 'order' must be a dictionary.",
+            f"An error occurred in get_order for {order_id}: 'order' must be a dictionary.",
             exc_info=True,
         )
 
@@ -536,7 +535,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: RESTClient not initialized.",
+            f"An error occurred in cancel_orders for {order_ids}: RESTClient not initialized.",
             exc_info=True,
         )
 
@@ -546,7 +545,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in cancel_orders for []: order_ids must be a non-empty list.",
+            "An error occurred in cancel_orders for []: order_ids must be a non-empty list.",
             exc_info=True,
         )
 
@@ -585,7 +584,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: {self.mock_http_error}",
+            f"An error occurred in cancel_orders for {order_ids}: {self.mock_http_error}",
             exc_info=True,
         )
 
@@ -596,7 +595,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: {self.mock_request_exception}",
+            f"An error occurred in cancel_orders for {order_ids}: {self.mock_request_exception}",
             exc_info=True,
         )
 
@@ -605,7 +604,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: Chaos",
+            f"An error occurred in cancel_orders for {order_ids}: Chaos",
             exc_info=True,
         )
 
@@ -616,7 +615,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: cancel_orders response should be a dictionary.",
+            f"An error occurred in cancel_orders for {order_ids}: cancel_orders response should be a dictionary.",
             exc_info=True,
         )
 
@@ -627,7 +626,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: 'results' key missing in response.",
+            f"An error occurred in cancel_orders for {order_ids}: 'results' key missing in response.",
             exc_info=True,
         )
 
@@ -640,7 +639,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: 'results' key should be a list.",
+            f"An error occurred in cancel_orders for {order_ids}: 'results' key should be a list.",
             exc_info=True,
         )
 
@@ -652,7 +651,7 @@ class TestCoinbaseClient(unittest.TestCase):
         )
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "Assertion failed in limit_order for BTC-USD: limit_order response should be a dictionary.",
+            "An error occurred in limit_order for BTC-USD: limit_order response should be a dictionary.",
             exc_info=True,
         )
 
@@ -708,7 +707,7 @@ class TestCoinbaseClient(unittest.TestCase):
         result = self.client.cancel_orders(order_ids)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            f"Assertion failed in cancel_orders for {order_ids}: Each item in 'results' should be a dictionary.",
+            f"An error occurred in cancel_orders for {order_ids}: Each item in 'results' should be a dictionary.",
             exc_info=True,
         )
 

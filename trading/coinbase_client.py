@@ -83,6 +83,12 @@ class CoinbaseClient:
                 return response
         return response
 
+    def _log_api_error(self, method_name: str, error: Exception) -> None:
+        """Logs a standardized error message for API call failures."""
+        self.logger.error(
+            f"An error occurred in {method_name}: {error}", exc_info=True
+        )
+
     def get_accounts(self) -> Optional[List[Dict[str, Any]]]:
         """Retrieves a list of all trading accounts."""
         self.logger.debug("Attempting to retrieve accounts.")
@@ -101,11 +107,8 @@ class CoinbaseClient:
 
             self.logger.info(f"Successfully retrieved {len(accounts)} accounts.")
             return accounts
-        except (HTTPError, RequestException) as e:
-            self.logger.error(f"Assertion failed in get_accounts: {e}", exc_info=True)
-            return None
-        except Exception as e:
-            self.logger.error(f"Assertion failed in get_accounts: {e}", exc_info=True)
+        except (HTTPError, RequestException, Exception) as e:
+            self._log_api_error("get_accounts", e)
             return None
 
     def get_product_candles(
@@ -138,17 +141,8 @@ class CoinbaseClient:
                 f"Successfully retrieved {len(candles)} candles for {product_id}."
             )
             return candles
-        except (HTTPError, RequestException) as e:
-            self.logger.error(
-                f"Assertion failed in get_product_candles for {product_id}: {e}",
-                exc_info=True,
-            )
-            return None
-        except Exception as e:
-            self.logger.error(
-                f"Assertion failed in get_product_candles for {product_id}: {e}",
-                exc_info=True,
-            )
+        except (HTTPError, RequestException, Exception) as e:
+            self._log_api_error(f"get_product_candles for {product_id}", e)
             return None
 
     def get_product_book(
@@ -173,17 +167,8 @@ class CoinbaseClient:
 
             self.logger.info(f"Successfully retrieved order book for {product_id}.")
             return pricebook
-        except (HTTPError, RequestException) as e:
-            self.logger.error(
-                f"Assertion failed in get_product_book for {product_id}: {e}",
-                exc_info=True,
-            )
-            return None
-        except Exception as e:
-            self.logger.error(
-                f"Assertion failed in get_product_book for {product_id}: {e}",
-                exc_info=True,
-            )
+        except (HTTPError, RequestException, Exception) as e:
+            self._log_api_error(f"get_product_book for {product_id}", e)
             return None
 
     def get_product(self, product_id: str) -> Optional[Dict[str, Any]]:
@@ -208,10 +193,10 @@ class CoinbaseClient:
                 return response_dict
 
             except (HTTPError, RequestException) as e:
-                self.logger.warning(
-                    f"HTTP error on attempt {attempt + 1}/{max_retries} for {product_id}: {e}. Retrying in {retry_delay}s..."
-                )
                 if attempt < max_retries - 1:
+                    self.logger.warning(
+                        f"HTTP error on attempt {attempt + 1}/{max_retries} for {product_id}: {e}. Retrying in {retry_delay}s..."
+                    )
                     time.sleep(retry_delay)
                 else:
                     self.logger.error(
@@ -220,10 +205,7 @@ class CoinbaseClient:
                     )
                     return None
             except Exception as e:
-                self.logger.error(
-                    f"An unexpected error occurred in get_product for {product_id}: {e}",
-                    exc_info=True,
-                )
+                self._log_api_error(f"get_product for {product_id}", e)
                 return None
         return None
 
@@ -274,17 +256,8 @@ class CoinbaseClient:
                 )
 
             return response_dict
-        except (HTTPError, RequestException) as e:
-            self.logger.error(
-                f"Assertion failed in limit_order for {product_id}: {e}",
-                exc_info=True,
-            )
-            return None
-        except Exception as e:
-            self.logger.error(
-                f"Assertion failed in limit_order for {product_id}: {e}",
-                exc_info=True,
-            )
+        except (HTTPError, RequestException, Exception) as e:
+            self._log_api_error(f"limit_order for {product_id}", e)
             return None
 
     def limit_order_buy(
@@ -339,15 +312,8 @@ class CoinbaseClient:
 
             self.logger.info(f"Successfully retrieved order {order_id}.")
             return order_details
-        except (HTTPError, RequestException) as e:
-            self.logger.error(
-                f"Assertion failed in get_order for {order_id}: {e}", exc_info=True
-            )
-            return None
-        except Exception as e:
-            self.logger.error(
-                f"Assertion failed in get_order for {order_id}: {e}", exc_info=True
-            )
+        except (HTTPError, RequestException, Exception) as e:
+            self._log_api_error(f"get_order for {order_id}", e)
             return None
 
     def cancel_orders(self, order_ids: List[str]) -> Optional[List[Dict[str, Any]]]:
@@ -391,14 +357,6 @@ class CoinbaseClient:
                     )
 
             return results
-        except (HTTPError, RequestException) as e:
-            self.logger.error(
-                f"Assertion failed in cancel_orders for {order_ids}: {e}", exc_info=True
-            )
-            return None
-        except Exception as e:
-            self.logger.error(
-                f"Assertion failed in cancel_orders for {order_ids}: {e}",
-                exc_info=True,
-            )
+        except (HTTPError, RequestException, Exception) as e:
+            self._log_api_error(f"cancel_orders for {order_ids}", e)
             return None
