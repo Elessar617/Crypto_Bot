@@ -7,7 +7,7 @@ the maintainability of the tests.
 
 import pytest
 import os
-from typing import Dict, Any, Generator
+from typing import Dict, Any
 
 # Added imports for logger setup
 from logger import setup_logging, LoggerDirectoryError

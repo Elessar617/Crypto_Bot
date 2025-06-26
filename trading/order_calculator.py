@@ -19,7 +19,7 @@ def calculate_buy_order_details(
     Args:
         buy_amount_usd: The amount in USD to spend.
         last_close_price: The last closing price of the asset.
-        product_details: Dictionary with product constraints like increments and min size.
+        product_details: Dict with product constraints (increments, min size).
         logger: Logger instance.
 
     Returns:
@@ -42,7 +42,8 @@ def calculate_buy_order_details(
 
         if size < base_min_size:
             logger.warning(
-                f"[{asset_id}] Calculated buy size {size} is below min size {base_min_size}. Not placing order."
+                f"[{asset_id}] Calculated buy size {size} is below min size "
+                f"{base_min_size}. Not placing order."
             )
             return None
 
@@ -75,13 +76,15 @@ def determine_sell_orders_params(
     logger: logging.Logger,
 ) -> List[Dict[str, str]]:
     """
-    Calculates parameters for tiered sell orders based on profit targets and product constraints.
+    Calculates parameters for tiered sell orders based on profit targets and product
+    constraints.
 
     Args:
         buy_price: The price at which the asset was bought.
         buy_quantity: The total quantity of the asset bought.
         product_details: A dictionary containing details about the trading product,
-                         including 'quote_increment', 'base_increment', and 'base_min_size'.
+                         including 'quote_increment', 'base_increment', and
+                         'base_min_size'.
         config_asset_params: A dictionary of configuration parameters for the asset,
                              including 'sell_profit_tiers'.
         logger: Logger instance for logging messages.
@@ -150,13 +153,15 @@ def determine_sell_orders_params(
         # --- Validation and Adjustment ---
         if quantity_to_sell_rounded <= 0:
             logger.warning(
-                f"[{asset_id}] Tier {i+1} sell quantity is zero after rounding. Skipping."
+                f"[{asset_id}] Tier {i+1} sell quantity is zero after rounding. "
+                f"Skipping."
             )
             continue
 
         if quantity_to_sell_rounded < base_min_size:
             logger.warning(
-                f"[{asset_id}] Tier {i+1} quantity {quantity_to_sell_rounded} is below min size {base_min_size}. Skipping."
+                f"[{asset_id}] Tier {i+1} quantity {quantity_to_sell_rounded} is below "
+                f"min size {base_min_size}. Skipping."
             )
             continue
 
@@ -166,7 +171,8 @@ def determine_sell_orders_params(
             remaining_quantity < -base_increment
         ):  # Allow for small floating point inaccuracies
             logger.error(
-                f"[{asset_id}] Negative remaining quantity ({remaining_quantity}) after tier {i+1}. This should not happen."
+                f"[{asset_id}] Negative remaining quantity ({remaining_quantity}) after "
+                f"tier {i+1}. This should not happen."
             )
             # This indicates a logic error, stop processing to be safe
             return []
@@ -181,7 +187,8 @@ def determine_sell_orders_params(
     # --- Final Check ---
     if remaining_quantity > base_min_size:
         logger.warning(
-            f"[{asset_id}] {remaining_quantity} of asset remains unsold after tiering logic due to rounding."
+            f"[{asset_id}] {remaining_quantity} of asset remains unsold after "
+            f"tiering logic due to rounding."
         )
 
     return sell_order_params

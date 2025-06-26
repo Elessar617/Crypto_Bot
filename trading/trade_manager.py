@@ -218,13 +218,16 @@ class TradeManager:
                 return
 
             sell_orders_to_save = []
-            for i, (size, price) in enumerate(sell_order_params):
+            for i, params in enumerate(sell_order_params):
+                size = params["base_size"]
+                price = params["limit_price"]
                 self.logger.info(
                     f"[{asset_id}] Placing sell order "
                     f"{i + 1}/{len(sell_order_params)}: size={size}, price={price}"
                 )
                 client_order_id = self.client._generate_client_order_id()
-                order_result = self.client.limit_order_sell(
+                order_result = self.client.limit_order(
+                    side="SELL",
                     product_id=asset_id,
                     base_size=str(size),
                     limit_price=str(price),
@@ -384,7 +387,8 @@ class TradeManager:
 
             # 5. Place the buy order
             client_order_id = self.client._generate_client_order_id()
-            order_result = self.client.limit_order_buy(
+            order_result = self.client.limit_order(
+                side="BUY",
                 product_id=asset_id,
                 base_size=str(size),
                 limit_price=str(limit_price),

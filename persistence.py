@@ -94,7 +94,8 @@ def load_trade_state(asset_id: str) -> Dict[str, Any]:
             if not isinstance(state_data, dict):
                 # File content is not a dictionary
                 logger.error(
-                    f"Corrupted trade state file for {asset_id}: content is not a dict. File: {file_path}"
+                    f"Corrupted trade state file for {asset_id}: "
+                    f"content is not a dict. File: {file_path}"
                 )
                 return {}
             # In a real application, log successful load
@@ -168,7 +169,8 @@ def load_open_buy_order(asset_id: str) -> Optional[Dict[str, Any]]:
         and "order_id" in open_order_data
         and "params" in open_order_data
     ):
-        # print(f"Loaded open buy order for {asset_id}: {open_order_data['order_id']}") # noqa: T201
+        # print(f"Loaded open buy order for {asset_id}: "
+        #       f"{open_order_data['order_id']}") # noqa: T201
         return open_order_data
 
     # print(f"No open buy order found for {asset_id}") # noqa: T201
@@ -308,7 +310,8 @@ def add_sell_order_to_filled_trade(
     assert isinstance(
         sell_order_details, dict
     ), "sell_order_details must be a dictionary."
-    # Ensure sell_order_id is part of the details for consistency, though passed separately
+    # Ensure sell_order_id is part of the details for consistency,
+    # though passed separately
     if (
         "order_id" not in sell_order_details
         or sell_order_details["order_id"] != sell_order_id
@@ -333,7 +336,8 @@ def add_sell_order_to_filled_trade(
     for so in filled_trade["associated_sell_orders"]:
         if so.get("order_id") == sell_order_id:
             logger.warning(
-                f"Sell order {sell_order_id} already exists for {asset_id}. Not adding again."
+                f"Sell order {sell_order_id} already exists for {asset_id}. "
+                f"Not adding again."
             )
             return
 

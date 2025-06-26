@@ -13,7 +13,8 @@ API_SECRET = os.getenv("COINBASE_API_SECRET")
 
 def test_api_connection():
     """
-    Initializes the Coinbase REST client and fetches account data to test API connectivity.
+    Initializes the Coinbase REST client and fetches account data to test API
+    connectivity.
     """
     print("--- Attempting to connect to Coinbase API ---")
 

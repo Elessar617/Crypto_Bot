@@ -240,6 +240,8 @@ class CoinbaseClient:
             f"Attempting to place {side.lower()} limit order for {base_size} of {product_id} at {limit_price}."
         )
         try:
+            assert side.upper() in ["BUY", "SELL"], "Side must be 'BUY' or 'SELL'."
+            assert product_id, "Product ID must be a non-empty string."
             assert self.client is not None, "RESTClient not initialized."
 
             response = self.client.limit_order(
@@ -260,8 +262,10 @@ class CoinbaseClient:
                     f"Successfully placed {side.lower()} order for {product_id}. Order ID: {response_dict.get('order_id')}"
                 )
             else:
-                error_details = response_dict.get("error_response", {})
-                reason = error_details.get("message", "Unknown reason")
+                reason = response_dict.get("failure_reason")
+                if not reason:
+                    error_details = response_dict.get("error_response", {})
+                    reason = error_details.get("message", "Unknown reason")
                 self.logger.error(
                     f"Failed to place {side.lower()} order for {product_id}. Reason: {reason}"
                 )

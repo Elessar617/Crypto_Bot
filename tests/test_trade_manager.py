@@ -29,6 +29,7 @@ class TestTradeManager(unittest.TestCase):
                 "rsi_period": 14,
                 "rsi_oversold_threshold": 30,
                 "sell_profit_tiers": [],
+                "granularity": "ONE_HOUR",
             }
         }
         self.mock_client.get_product.return_value = {
@@ -71,29 +72,30 @@ class TestTradeManager(unittest.TestCase):
 
         # Arrange: No existing orders
         self.mock_persistence.load_trade_state.return_value = {}
-        self.mock_client.get_product_candles.return_value = [(0, 0, 0, 0, 100)] * 20
+        self.mock_client.get_product.return_value = {
+            "product_id": "BTC-USD",
+            "base_increment": "0.00000001",
+            "quote_increment": "0.01",
+            "base_min_size": "0.001",
+        }
+        self.mock_client.get_product_candles.return_value = [{"close": "100"}] * 20
         self.mock_ta.calculate_rsi.return_value = pd.Series([25, 35])
         self.mock_signal_analyzer.should_buy_asset.return_value = True
         self.mock_order_calculator.calculate_buy_order_details.return_value = (
             Decimal("0.001"),
             Decimal("100.00"),
         )
-        mock_buy_result = MagicMock()
-        mock_buy_result.get.side_effect = lambda key, default=None: {
+        self.mock_client.limit_order.return_value = {
             "success": True,
             "order_id": "order-123",
-        }.get(key, default)
-        mock_buy_result.__getitem__.side_effect = lambda key: {
-            "success": True,
-            "order_id": "order-123",
-        }[key]
-        self.mock_client.limit_order_buy.return_value = mock_buy_result
+        }
 
         # Act
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
 
         # Assert
-        self.mock_client.limit_order_buy.assert_called_once_with(
+        self.mock_client.limit_order.assert_called_once_with(
+            side="BUY",
             client_order_id=unittest.mock.ANY,
             product_id="BTC-USD",
             base_size="0.001",
@@ -181,23 +183,37 @@ class TestTradeManager(unittest.TestCase):
         self.mock_config.TRADING_PAIRS["BTC-USD"]["sell_profit_tiers"] = [
             {"profit_target": 0.02, "quantity_percentage": 1.0}
         ]
-        self.mock_client.limit_order_sell.return_value = {
+        self.mock_client.limit_order.return_value = {
             "success": True,
             "order_id": "sell-456",
         }
+        self.mock_order_calculator.determine_sell_orders_params.return_value = [
+            {"limit_price": "102.00", "base_size": "1.0"}
+        ]
 
         # Act
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
 
         # Assert
-        self.mock_client.limit_order_sell.assert_called_once()
-        self.mock_persistence.save_filled_buy_trade.assert_called_once()
-        # Verify the saved state includes the new sell order
-        saved_trade = self.mock_persistence.save_filled_buy_trade.call_args[0][1]
-        self.assertEqual(len(saved_trade["associated_sell_orders"]), 1)
-        self.assertEqual(
-            saved_trade["associated_sell_orders"][0]["order_id"], "sell-456"
+        self.mock_client.limit_order.assert_called_once_with(
+            side="SELL",
+            product_id="BTC-USD",
+            base_size="1.0",
+            limit_price="102.00",
+            client_order_id=unittest.mock.ANY,
         )
+        self.mock_persistence.save_open_sell_orders.assert_called_once_with(
+            "BTC-USD",
+            [
+                {
+                    "order_id": "sell-456",
+                    "size": "1.0",
+                    "price": "102.00",
+                    "timestamp": unittest.mock.ANY,
+                }
+            ],
+        )
+        self.mock_persistence.clear_filled_buy_trade.assert_called_once_with("BTC-USD")
 
     def test_handle_filled_buy_order_checks_existing_sell_orders(self):
         """Test checking the status of existing sell orders."""

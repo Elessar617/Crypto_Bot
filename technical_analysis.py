@@ -6,7 +6,6 @@ from typing import Optional
 
 import pandas as pd  # type: ignore[import]
 import ta  # type: ignore[import] # ta library might not have type stubs
-import numpy as np  # For NaN values
 
 from logger import (
     get_logger,

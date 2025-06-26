@@ -11,7 +11,7 @@ Expects API keys to be set as environment variables as specified in config.py.
 
 import sys
 import time
-import types
+
 
 # Internal modules
 # Only import modules needed for initialization before other modules are loaded.
@@ -76,10 +76,11 @@ def run_bot() -> None:
             try:
                 trade_manager.process_asset_trade_cycle(asset_id=asset_id)
             except Exception as e:
-                logger.error(
-                    f"An unexpected error occurred while processing asset {asset_id}: {e}",
-                    exc_info=True,
+                error_msg = (
+                    "An unexpected error occurred while "
+                    f"processing asset {asset_id}: {e}"
                 )
+                logger.error(error_msg, exc_info=True)
                 # Continue to the next asset
             finally:
                 logger.info(f"--- Completed trade cycle for {asset_id} ---")

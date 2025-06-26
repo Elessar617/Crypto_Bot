@@ -5,7 +5,7 @@ Unit tests for the persistence.py module.
 import unittest
 import os
 import json
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import patch, mock_open
 
 # Adjust the path to import persistence from the parent directory
 import sys
@@ -19,8 +19,9 @@ if MODULE_DIR not in sys.path:
 import persistence
 
 # Define a consistent DATA_DIR for tests, mirroring persistence.py logic
-# This should point to a temporary or test-specific data directory if real file ops are tested,
-# but since we mock, it's more about consistency with the module's internal path construction.
+# This should point to a temporary or test-specific data directory if real
+# file ops are tested, but since we mock, it's more about consistency
+# with the module's internal path construction.
 TEST_PERSISTENCE_DIR = os.path.join(MODULE_DIR, "data")
 
 
@@ -146,7 +147,7 @@ class TestPersistence(unittest.TestCase):
     def test_load_trade_state_corrupted_data_not_dict(
         self, mock_json_load, mock_file_open, mock_os_exists
     ):
-        """Test load_trade_state returns empty dict if loaded data is not a dictionary."""
+        """Test load_trade_state returns empty dict for a non-dict file."""
         mock_os_exists.return_value = True
         asset_id = "ADA-USD"
         mock_json_load.return_value = "this is a string, not a dict"
@@ -260,7 +261,7 @@ class TestPersistence(unittest.TestCase):
         persistence.clear_open_buy_order(asset_id)
 
         mock_load_trade_state.assert_called_once_with(asset_id)
-        mock_save_trade_state.assert_not_called()  # save_trade_state should not be called
+        mock_save_trade_state.assert_not_called()
 
     # --- Tests for filled_buy_trade helper functions ---
 
@@ -470,7 +471,7 @@ class TestPersistence(unittest.TestCase):
             asset_id, sell_order_id, sell_order_details_new
         )
 
-        mock_save_trade_state.assert_not_called()  # Should not save if duplicate and not updating
+        mock_save_trade_state.assert_not_called()  # Not saved if duplicate
 
     @patch("persistence.save_trade_state")
     @patch("persistence.load_trade_state")

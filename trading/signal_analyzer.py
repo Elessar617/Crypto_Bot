@@ -14,7 +14,8 @@ def should_buy_asset(
     logger: logging.Logger,
 ) -> bool:
     """
-    Determines if an asset should be bought based on its RSI crossing an oversold threshold.
+    Determines if an asset should be bought based on its RSI crossing an
+    oversold threshold.
 
     This function implements the primary buy signal logic: it checks if the most
     recent RSI value has crossed up and over a defined oversold threshold from
@@ -33,7 +34,8 @@ def should_buy_asset(
         - rsi_series is not None and contains at least two numeric values.
         - config_asset_params contains a valid 'rsi_oversold_threshold'.
     """
-    # Dual validation: Assertions for developers, explicit checks for runtime robustness.
+    # Dual validation: Assertions for developers, explicit checks for runtime
+    # robustness.
     assert rsi_series is not None, "RSI series cannot be None."
     assert len(rsi_series) >= 2, "RSI series must have at least 2 data points."
     assert "rsi_oversold_threshold" in config_asset_params, "RSI threshold missing."

@@ -22,7 +22,7 @@ sys.modules["config"] = mock_config_module
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from technical_analysis import (
+from technical_analysis import (  # noqa: E402
     calculate_rsi,
     calculate_sma,
 )
