@@ -25,9 +25,7 @@ APP_LOGGER_NAME: Final[str] = "CryptoBotV6"
 _logger_instance: Optional[logging.Logger] = None
 
 
-def setup_logging(
-    level: str, log_file: str, persistence_dir: str
-) -> logging.Logger:
+def setup_logging(level: str, log_file: str, persistence_dir: str) -> logging.Logger:
     """
     Configures and returns the application's root logger.
 

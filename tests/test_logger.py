@@ -7,7 +7,7 @@ import shutil  # For cleaning up test directories
 import sys
 from unittest import mock
 import importlib
-import types
+
 from types import ModuleType
 from typing import Optional
 import tempfile
@@ -40,8 +40,8 @@ class TestLogger(unittest.TestCase):
         """Set up a clean environment for each logger test."""
         # Save original modules to restore them later. This is critical for isolation.
         self.original_modules = {
-            'config': sys.modules.pop('config', None),
-            'logger': sys.modules.pop('logger', None)
+            "config": sys.modules.pop("config", None),
+            "logger": sys.modules.pop("logger", None),
         }
         self.addCleanup(self._restore_modules)
 
@@ -54,7 +54,7 @@ class TestLogger(unittest.TestCase):
         self.mock_config.PERSISTENCE_DIR = self.test_dir
         self.mock_config.LOG_FILE = "test_app.log"
         self.mock_config.LOG_LEVEL = "DEBUG"
-        sys.modules['config'] = self.mock_config
+        sys.modules["config"] = self.mock_config
 
         # Import a fresh copy of the logger for each test
         self.logger_module = importlib.import_module(LOGGER_MODULE_NAME)
@@ -80,8 +80,12 @@ class TestLogger(unittest.TestCase):
         self.assertEqual(logger.level, logging.DEBUG)
 
         # Check that handlers are present
-        has_stream_handler = any(isinstance(h, logging.StreamHandler) for h in logger.handlers)
-        has_file_handler = any(isinstance(h, logging.FileHandler) for h in logger.handlers)
+        has_stream_handler = any(
+            isinstance(h, logging.StreamHandler) for h in logger.handlers
+        )
+        has_file_handler = any(
+            isinstance(h, logging.FileHandler) for h in logger.handlers
+        )
         self.assertTrue(has_stream_handler, "No StreamHandler found.")
         self.assertTrue(has_file_handler, "No FileHandler found.")
 
@@ -89,7 +93,9 @@ class TestLogger(unittest.TestCase):
         log_dir = os.path.join(self.test_dir, "logs")
         log_file = os.path.join(log_dir, self.mock_config.LOG_FILE)
         self.assertTrue(os.path.isdir(log_dir), "Log directory was not created.")
-        self.assertTrue(os.path.isfile(log_file), f"Log file was not created at {log_file}.")
+        self.assertTrue(
+            os.path.isfile(log_file), f"Log file was not created at {log_file}."
+        )
 
     def test_logging_to_file(self):
         """Test that messages are written to the log file."""
@@ -112,7 +118,10 @@ class TestLogger(unittest.TestCase):
         self.logger_module._reset_logger()
 
         # Patch os.makedirs just for this test to simulate failure
-        with mock.patch(f"{LOGGER_MODULE_NAME}.os.makedirs", side_effect=OSError("Permission denied")):
+        with mock.patch(
+            f"{LOGGER_MODULE_NAME}.os.makedirs",
+            side_effect=OSError("Permission denied"),
+        ):
             with self.assertRaises(self.logger_module.LoggerDirectoryError) as cm:
                 self.logger_module.setup_logging(
                     level=self.mock_config.LOG_LEVEL,
@@ -126,7 +135,10 @@ class TestLogger(unittest.TestCase):
         self.logger_module._reset_logger()
 
         # Patch FileHandler just for this test to simulate failure
-        with mock.patch(f"{LOGGER_MODULE_NAME}.logging.FileHandler", side_effect=IOError("Permission denied")):
+        with mock.patch(
+            f"{LOGGER_MODULE_NAME}.logging.FileHandler",
+            side_effect=IOError("Permission denied"),
+        ):
             # This call should handle the error gracefully and not raise an exception
             self.logger_module.setup_logging(
                 level=self.mock_config.LOG_LEVEL,
@@ -139,7 +151,9 @@ class TestLogger(unittest.TestCase):
         has_file_handler = any(
             isinstance(h, logging.FileHandler) for h in app_logger.handlers
         )
-        self.assertFalse(has_file_handler, "FileHandler should not be added on IOError.")
+        self.assertFalse(
+            has_file_handler, "FileHandler should not be added on IOError."
+        )
 
 
 if __name__ == "__main__":

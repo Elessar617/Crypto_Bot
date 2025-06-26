@@ -10,6 +10,7 @@ load_dotenv()
 API_KEY = os.getenv("COINBASE_API_KEY")
 API_SECRET = os.getenv("COINBASE_API_SECRET")
 
+
 def test_api_connection():
     """
     Initializes the Coinbase REST client and fetches account data to test API connectivity.
@@ -48,6 +49,7 @@ def test_api_connection():
         print("  - Are your API keys correct and active?")
         print("  - Do the keys have the required permissions ('wallet:accounts:read')?")
         print("  - Is your internet connection working?")
+
 
 if __name__ == "__main__":
     test_api_connection()

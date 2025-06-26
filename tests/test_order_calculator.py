@@ -80,10 +80,14 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertEqual(params[2]["size"], "0.3334")
 
     def test_skips_tier_if_quantity_below_min_size(self):
-        """Test that a tier is skipped if its calculated quantity is below the minimum."""
+        """Test tier is skipped if its quantity is below the minimum."""
         # Make the buy quantity very small
         params = determine_sell_orders_params(
-            100.0, 0.001, self.product_details, self.config_asset_params, self.mock_logger
+            100.0,
+            0.001,
+            self.product_details,
+            self.config_asset_params,
+            self.mock_logger,
         )
         self.assertEqual(len(params), 1)
         # First tier (0.001 * 0.5 = 0.0005) is skipped because it's < 0.001 min_size
@@ -94,17 +98,33 @@ class TestOrderCalculator(unittest.TestCase):
     def test_returns_empty_if_all_tiers_below_min_size(self):
         """Test returns an empty list if no tier meets the minimum size."""
         params = determine_sell_orders_params(
-            100.0, 0.0005, self.product_details, self.config_asset_params, self.mock_logger
+            100.0,
+            0.0005,
+            self.product_details,
+            self.config_asset_params,
+            self.mock_logger,
         )
         self.assertEqual(len(params), 0)
 
     def test_input_validation_assertions(self):
         """Test that assertions fire for invalid inputs."""
         with self.assertRaises(AssertionError):
-            determine_sell_orders_params(0, 1.0, self.product_details, self.config_asset_params, self.mock_logger)
+            determine_sell_orders_params(
+                0, 1.0, self.product_details, self.config_asset_params, self.mock_logger
+            )
         with self.assertRaises(AssertionError):
-            determine_sell_orders_params(100.0, 0, self.product_details, self.config_asset_params, self.mock_logger)
+            determine_sell_orders_params(
+                100.0,
+                0,
+                self.product_details,
+                self.config_asset_params,
+                self.mock_logger,
+            )
         with self.assertRaises(AssertionError):
-            determine_sell_orders_params(100.0, 1.0, {}, self.config_asset_params, self.mock_logger)
+            determine_sell_orders_params(
+                100.0, 1.0, {}, self.config_asset_params, self.mock_logger
+            )
         with self.assertRaises(AssertionError):
-            determine_sell_orders_params(100.0, 1.0, self.product_details, {}, self.mock_logger)
+            determine_sell_orders_params(
+                100.0, 1.0, self.product_details, {}, self.mock_logger
+            )

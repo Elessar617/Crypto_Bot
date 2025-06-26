@@ -6,7 +6,8 @@ coinbase-advanced-py==1.8.2 # For Coinbase Advanced Trade API interaction
 python-dotenv==0.21.0 # For loading environment variables from .env file
 
 # Typing & Language Features
-typing-extensions==4.7.1 # For advanced typing features
+typing-extensions==4.12.2 # For advanced typing features
+types-requests==2.32.0.20240622 # For advanced typing features
 
 # Development & Linting Tools
 pytest==7.4.0         # For running automated tests

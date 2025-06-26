@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 import time
-import types
+
 import unittest
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pandas as pd
 
@@ -59,7 +59,7 @@ class TestTradeManager(unittest.TestCase):
         self.mock_logger.error.assert_called_with("[ETH-USD] Configuration not found.")
 
     def test_process_cycle_handles_no_product_details(self):
-        """Test that the trade cycle exits gracefully if product details fail to load."""
+        """Test trade cycle exits gracefully if product details fail to load."""
         self.mock_client.get_product.return_value = None
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
         self.mock_logger.error.assert_called_with(
@@ -123,7 +123,9 @@ class TestTradeManager(unittest.TestCase):
         """Test handling a buy order that has been filled."""
         # Arrange: An open buy order exists
         open_order = {"order_id": "order-123", "size": "0.1", "price": "100.00"}
-        self.mock_persistence.load_trade_state.return_value = {"open_buy_order": open_order}
+        self.mock_persistence.load_trade_state.return_value = {
+            "open_buy_order": open_order
+        }
         mock_order = MagicMock()
         order_data = {
             "order_id": "order-123",
@@ -139,10 +141,10 @@ class TestTradeManager(unittest.TestCase):
         mock_order.__contains__.side_effect = lambda key: key in order_data
         self.mock_client.get_order.return_value = mock_order
         self.mock_order_calculator.determine_sell_orders_params.return_value = []
-    
+
         # Act
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
-    
+
         # Assert
         self.mock_client.get_order.assert_called_once_with("order-123")
         self.mock_persistence.save_filled_buy_trade.assert_called_once()
@@ -151,7 +153,9 @@ class TestTradeManager(unittest.TestCase):
     def test_handle_open_buy_order_is_still_open(self):
         """Test handling a buy order that is still open."""
         open_order = {"order_id": "order-123"}
-        self.mock_persistence.load_trade_state.return_value = {"open_buy_order": open_order}
+        self.mock_persistence.load_trade_state.return_value = {
+            "open_buy_order": open_order
+        }
         self.mock_client.get_order.return_value = {"status": "OPEN"}
 
         # Act
@@ -171,11 +175,16 @@ class TestTradeManager(unittest.TestCase):
             "buy_quantity": "1.0",
             "associated_sell_orders": [],
         }
-        self.mock_persistence.load_trade_state.return_value = {"filled_buy_trade": filled_buy}
+        self.mock_persistence.load_trade_state.return_value = {
+            "filled_buy_trade": filled_buy
+        }
         self.mock_config.TRADING_PAIRS["BTC-USD"]["sell_profit_tiers"] = [
             {"profit_target": 0.02, "quantity_percentage": 1.0}
         ]
-        self.mock_client.limit_order_sell.return_value = {"success": True, "order_id": "sell-456"}
+        self.mock_client.limit_order_sell.return_value = {
+            "success": True,
+            "order_id": "sell-456",
+        }
 
         # Act
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
@@ -186,7 +195,9 @@ class TestTradeManager(unittest.TestCase):
         # Verify the saved state includes the new sell order
         saved_trade = self.mock_persistence.save_filled_buy_trade.call_args[0][1]
         self.assertEqual(len(saved_trade["associated_sell_orders"]), 1)
-        self.assertEqual(saved_trade["associated_sell_orders"][0]["order_id"], "sell-456")
+        self.assertEqual(
+            saved_trade["associated_sell_orders"][0]["order_id"], "sell-456"
+        )
 
     def test_handle_filled_buy_order_checks_existing_sell_orders(self):
         """Test checking the status of existing sell orders."""
@@ -196,7 +207,9 @@ class TestTradeManager(unittest.TestCase):
             "buy_order_id": "buy-123",
             "associated_sell_orders": [sell_order],
         }
-        self.mock_persistence.load_trade_state.return_value = {"filled_buy_trade": filled_buy}
+        self.mock_persistence.load_trade_state.return_value = {
+            "filled_buy_trade": filled_buy
+        }
         # Simulate the sell order is now filled
         self.mock_client.get_order.return_value = {"status": "FILLED"}
 

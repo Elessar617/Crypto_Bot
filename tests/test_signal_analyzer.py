@@ -11,7 +11,7 @@ import pandas as pd
 # Ensure the project root is in the system path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from trading.signal_analyzer import should_buy_asset
+from trading.signal_analyzer import should_buy_asset  # noqa: E402
 
 
 class TestSignalAnalyzer(unittest.TestCase):
@@ -87,7 +87,9 @@ class TestSignalAnalyzer(unittest.TestCase):
         self.assertFalse(
             should_buy_asset(rsi_series, self.config_params, self.mock_logger)
         )
-        self.mock_logger.error.assert_called_once_with("RSI values are not valid numbers.")
+        self.mock_logger.error.assert_called_once_with(
+            "RSI values are not valid numbers."
+        )
 
 
 if __name__ == "__main__":

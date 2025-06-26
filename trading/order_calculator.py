@@ -61,7 +61,9 @@ def calculate_buy_order_details(
 def _round_decimal(d: Decimal, increment: Decimal) -> Decimal:
     """Rounds a Decimal to the nearest specified increment."""
     assert isinstance(d, Decimal), "Value to round must be a Decimal."
-    assert isinstance(increment, Decimal) and increment > 0, "Increment must be a positive Decimal."
+    assert (
+        isinstance(increment, Decimal) and increment > 0
+    ), "Increment must be a positive Decimal."
     return (d / increment).quantize(Decimal("1"), rounding=ROUND_DOWN) * increment
 
 
@@ -92,10 +94,18 @@ def determine_sell_orders_params(
     # --- Input Assertions ---
     assert buy_price > 0, "Buy price must be positive."
     assert buy_quantity > 0, "Buy quantity must be positive."
-    assert "quote_increment" in product_details, "'quote_increment' missing from product_details."
-    assert "base_increment" in product_details, "'base_increment' missing from product_details."
-    assert "base_min_size" in product_details, "'base_min_size' missing from product_details."
-    assert "sell_profit_tiers" in config_asset_params, "'sell_profit_tiers' missing from config_asset_params."
+    assert (
+        "quote_increment" in product_details
+    ), "'quote_increment' missing from product_details."
+    assert (
+        "base_increment" in product_details
+    ), "'base_increment' missing from product_details."
+    assert (
+        "base_min_size" in product_details
+    ), "'base_min_size' missing from product_details."
+    assert (
+        "sell_profit_tiers" in config_asset_params
+    ), "'sell_profit_tiers' missing from config_asset_params."
 
     # --- Initialization ---
     asset_id = product_details.get("product_id", "UNKNOWN_ASSET")
@@ -114,10 +124,14 @@ def determine_sell_orders_params(
         quantity_percentage = tier["quantity_percentage"]
 
         assert 0 < profit_target, f"Tier {i+1} profit target must be positive."
-        assert 0 < quantity_percentage <= 1, f"Tier {i+1} quantity percentage must be between 0 and 1."
+        assert (
+            0 < quantity_percentage <= 1
+        ), f"Tier {i+1} quantity percentage must be between 0 and 1."
 
         # Calculate sell price
-        sell_price_unrounded = Decimal(str(buy_price)) * (Decimal("1") + Decimal(str(profit_target)))
+        sell_price_unrounded = Decimal(str(buy_price)) * (
+            Decimal("1") + Decimal(str(profit_target))
+        )
         sell_price_rounded = _round_decimal(sell_price_unrounded, quote_increment)
 
         # Calculate sell quantity
@@ -125,9 +139,13 @@ def determine_sell_orders_params(
             # Assign all remaining quantity to the last tier to avoid rounding leftovers
             quantity_to_sell_unrounded = remaining_quantity
         else:
-            quantity_to_sell_unrounded = total_quantity_to_sell * Decimal(str(quantity_percentage))
+            quantity_to_sell_unrounded = total_quantity_to_sell * Decimal(
+                str(quantity_percentage)
+            )
 
-        quantity_to_sell_rounded = _round_decimal(quantity_to_sell_unrounded, base_increment)
+        quantity_to_sell_rounded = _round_decimal(
+            quantity_to_sell_unrounded, base_increment
+        )
 
         # --- Validation and Adjustment ---
         if quantity_to_sell_rounded <= 0:
@@ -144,17 +162,21 @@ def determine_sell_orders_params(
 
         # Update remaining quantity
         remaining_quantity -= quantity_to_sell_rounded
-        if remaining_quantity < -base_increment:  # Allow for small floating point inaccuracies
+        if (
+            remaining_quantity < -base_increment
+        ):  # Allow for small floating point inaccuracies
             logger.error(
                 f"[{asset_id}] Negative remaining quantity ({remaining_quantity}) after tier {i+1}. This should not happen."
             )
             # This indicates a logic error, stop processing to be safe
             return []
 
-        sell_order_params.append({
-            "price": f"{sell_price_rounded}",
-            "size": f"{quantity_to_sell_rounded}",
-        })
+        sell_order_params.append(
+            {
+                "price": f"{sell_price_rounded}",
+                "size": f"{quantity_to_sell_rounded}",
+            }
+        )
 
     # --- Final Check ---
     if remaining_quantity > base_min_size:
