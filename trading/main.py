@@ -12,14 +12,15 @@ Expects API keys to be set as environment variables as specified in config.py.
 import sys
 import time
 
-
-# Internal modules
-# Only import modules needed for initialization before other modules are loaded.
-from . import config
-from . import coinbase_client
-from . import persistence
-from . import technical_analysis
-from . import signal_analyzer, order_calculator
+# Local application imports
+from . import (
+    coinbase_client,
+    config,
+    order_calculator,
+    persistence,
+    signal_analyzer,
+    technical_analysis,
+)
 from .logger import LoggerDirectoryError, get_logger, setup_logging
 from .trade_manager import TradeManager
 
@@ -33,31 +34,24 @@ def run_bot() -> None:
     Includes comprehensive error handling and logging.
     """
     try:
-        # Initialize the logger as the very first step.
         setup_logging(
             level=config.LOG_LEVEL,
             log_file=config.LOG_FILE,
             persistence_dir=config.PERSISTENCE_DIR,
         )
         logger = get_logger()
-        logger.info("--- Starting v6 crypto trading bot run ---")
-
     except (LoggerDirectoryError, ValueError) as e:
-        # If logger setup fails, there's no logger. Print to stderr and exit.
         print(f"CRITICAL: Logger initialization failed: {e}", file=sys.stderr)
         sys.exit(1)
 
+    logger.info("--- Starting v6 crypto trading bot run ---")
     start_time = time.time()
 
     try:
-        # Initialize the Coinbase client. It reads config internally.
-        # A RuntimeError will be raised if initialization fails, which is caught below.
+        # Assert that the configuration is valid before proceeding.
+        assert config.TRADING_PAIRS, "Configuration error: TRADING_PAIRS is empty."
+
         client = coinbase_client.CoinbaseClient()
-        logger.info("Coinbase client initialized successfully.")
-
-        # The persistence module is used directly; its directory is created on import.
-
-        # Initialize the TradeManager once, outside the loop
         trade_manager = TradeManager(
             client=client,
             persistence_manager=persistence,
@@ -68,27 +62,21 @@ def run_bot() -> None:
             order_calculator=order_calculator,
         )
 
-        # Process each configured trading pair
         logger.info(f"Processing {len(config.TRADING_PAIRS)} configured trading pairs.")
         for asset_id in config.TRADING_PAIRS:
             logger.info(f"--- Starting trade cycle for {asset_id} ---")
             try:
                 trade_manager.process_asset_trade_cycle(asset_id=asset_id)
             except Exception as e:
-                error_msg = (
-                    "An unexpected error occurred while "
-                    f"processing asset {asset_id}: {e}"
+                logger.error(
+                    f"An unexpected error occurred while processing {asset_id}: {e}",
+                    exc_info=True,
                 )
-                logger.error(error_msg, exc_info=True)
-                # Continue to the next asset
             finally:
                 logger.info(f"--- Completed trade cycle for {asset_id} ---")
 
-    except RuntimeError as e:
-        # This catches critical initialization errors (e.g., from CoinbaseClient)
-        logger.critical(
-            f"A critical error occurred during bot initialization: {e}", exc_info=True
-        )
+    except (AssertionError, RuntimeError) as e:
+        logger.critical(f"A critical error halted the bot: {e}", exc_info=True)
         sys.exit(1)
     except Exception as e:
         logger.critical(

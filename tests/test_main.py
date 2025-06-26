@@ -32,7 +32,6 @@ class TestMainModule(unittest.TestCase):
         main.run_bot()
 
         mock_coinbase_client.assert_called_once_with()
-        mock_logger.info.assert_any_call("Coinbase client initialized successfully.")
 
         mock_trade_manager.assert_called_once_with(
             client=mock_client_instance,
@@ -66,7 +65,7 @@ class TestMainModule(unittest.TestCase):
         main.run_bot()
 
         mock_logger.critical.assert_called_once_with(
-            f"A critical error occurred during bot initialization: {error_message}",
+            f"A critical error halted the bot: {error_message}",
             exc_info=True,
         )
         mock_exit.assert_called_once_with(1)
@@ -99,11 +98,10 @@ class TestMainModule(unittest.TestCase):
         self.assertEqual(mock_trade_manager.call_count, 1)
         self.assertEqual(mock_tm_instance.process_asset_trade_cycle.call_count, 2)
 
-        expected_msg = (
-            "An unexpected error occurred while processing asset BTC-USD: "
-            "Test processing error"
+        mock_logger.error.assert_called_once_with(
+            f"An unexpected error occurred while processing BTC-USD: {error_message}",
+            exc_info=True,
         )
-        mock_logger.error.assert_called_once_with(expected_msg, exc_info=True)
         mock_exit.assert_not_called()
 
 
