@@ -116,8 +116,8 @@ This section tracks the final steps to ensure the codebase is stable, clean, and
 - **Step 3: Commit Changes:** [X] Commit the refactoring work to version control.
 - **Step 4: Run Bot (Smoke Test):** [X] Run the bot and validate it runs successfully in the live environment, fixing all runtime errors.
 - **Step 5: Resolve Test Setup:** [X] Add `pyproject.toml` and install in editable mode to resolve `ModuleNotFoundError` during test collection.
-- **Step 6: Verify with Tests:** [X] Run the full `pytest` suite to ensure no regressions.
-- **Step 7: Final Review:** [X] Run static analysis tools (`mypy`, `flake8`, `bandit`).
+- **Step 6: Final Verification:** [X] Run the full `pytest` suite and all static analysis tools (`mypy`, `flake8`, `bandit`) to confirm the codebase is stable and clean.
+- **Step 7: Final Code Review:** [ ] **(CURRENT STEP)** Conduct a final review of the codebase for clarity, consistency, and adherence to design principles.
 
 ---
 
