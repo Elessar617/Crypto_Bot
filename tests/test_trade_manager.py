@@ -29,7 +29,7 @@ class TestTradeManager(unittest.TestCase):
                 "rsi_period": 14,
                 "rsi_oversold_threshold": 30,
                 "sell_profit_tiers": [],
-                "granularity": "ONE_HOUR",
+                "candle_granularity_api_name": "ONE_HOUR",
             }
         }
         self.mock_client.get_product.return_value = {
@@ -56,8 +56,9 @@ class TestTradeManager(unittest.TestCase):
 
     def test_process_cycle_handles_no_config(self):
         """Test that the trade cycle exits gracefully if asset config is missing."""
-        self.trade_manager.process_asset_trade_cycle("ETH-USD")
-        self.mock_logger.error.assert_called_with("[ETH-USD] Configuration not found.")
+        self.mock_config.TRADING_PAIRS = {}
+        self.trade_manager.process_asset_trade_cycle("BTC-USD")
+        self.mock_logger.error.assert_called_with("[BTC-USD] Configuration not found.")
 
     def test_process_cycle_handles_no_product_details(self):
         """Test trade cycle exits gracefully if product details fail to load."""
@@ -78,7 +79,16 @@ class TestTradeManager(unittest.TestCase):
             "quote_increment": "0.01",
             "base_min_size": "0.001",
         }
-        self.mock_client.get_product_candles.return_value = [{"close": "100"}] * 20
+        self.mock_client.get_product_candles.return_value = [
+            {
+                "timestamp": time.time(),
+                "low": 99.0,
+                "high": 101.0,
+                "open": 100.0,
+                "close": 100.0,
+                "volume": 10.0,
+            }
+        ] * 20
         self.mock_ta.calculate_rsi.return_value = pd.Series([25, 35])
         self.mock_signal_analyzer.should_buy_asset.return_value = True
         self.mock_order_calculator.calculate_buy_order_details.return_value = (

@@ -121,8 +121,8 @@ class CoinbaseClient:
             assert self.client is not None, "RESTClient not initialized."
             assert product_id, "Product ID must be a non-empty string."
 
-            response = self.client.get_public_candles(
-                product_id=product_id, start=start, end=end, granularity=granularity
+            response = self.client.get_product_candles(
+                product_id=product_id, start_date=start, end_date=end, granularity=granularity
             )
             response_dict = self._handle_api_response(response)
 
@@ -188,16 +188,14 @@ class CoinbaseClient:
 
     def get_product(self, product_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves details for a single product with retry logic."""
-        self.logger.debug(f"Attempting to retrieve product {product_id}.")
+        self.logger.debug(f"Attempting to retrieve product details for {product_id}.")
         max_retries = 3
-        retry_delay_seconds = 5
+        retry_delay = 5  # seconds
 
         for attempt in range(max_retries):
             try:
                 assert self.client is not None, "RESTClient not initialized."
-                assert (
-                    isinstance(product_id, str) and product_id
-                ), "'product_id' cannot be empty."
+                assert product_id, "Product ID must be a non-empty string."
 
                 response = self.client.get_product(product_id=product_id)
                 response_dict = self._handle_api_response(response)
@@ -206,35 +204,27 @@ class CoinbaseClient:
                     response_dict, dict
                 ), "get_product response should be a dictionary."
 
-                # The response from get_product is the product dictionary itself.
-                # There is no nested 'product' key.
-                assert (
-                    "product_id" in response_dict
-                ), "'product_id' key missing from response, indicating an invalid product response."
-
-                self.logger.info(f"Successfully retrieved product {product_id}.")
+                self.logger.info(f"Successfully retrieved product details for {product_id}.")
                 return response_dict
 
             except (HTTPError, RequestException) as e:
-                if isinstance(e, HTTPError) and e.response.status_code >= 500:
-                    self.logger.warning(
-                        f"Attempt {attempt + 1} of {max_retries} failed for {product_id} with server error: {e}. Retrying in {retry_delay_seconds}s..."
-                    )
-                    time.sleep(retry_delay_seconds)
-                    continue
-                self.logger.error(
-                    f"Assertion failed in get_product for {product_id}: {e}",
-                    exc_info=True,
+                self.logger.warning(
+                    f"HTTP error on attempt {attempt + 1}/{max_retries} for {product_id}: {e}. Retrying in {retry_delay}s..."
                 )
-                return None
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                else:
+                    self.logger.error(
+                        f"Failed to fetch product details for {product_id} after {max_retries} attempts.",
+                        exc_info=True,
+                    )
+                    return None
             except Exception as e:
                 self.logger.error(
                     f"An unexpected error occurred in get_product for {product_id}: {e}",
                     exc_info=True,
                 )
                 return None
-
-        self.logger.error(f"Failed to retrieve product {product_id} after {max_retries} attempts.")
         return None
 
     def limit_order(

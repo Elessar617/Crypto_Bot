@@ -1,184 +1,99 @@
 """Unit tests for main.py module."""
 
-import os
-import sys
 import unittest
 from unittest.mock import patch, MagicMock, call
 
 # Import the module to be tested
-import trading.main  # noqa: E402
+from trading import main
 
 
 class TestMainModule(unittest.TestCase):
     """Tests for the main.py run_bot function."""
 
-    def test_run_bot_success(self):
+    @patch("trading.main.coinbase_client.CoinbaseClient")
+    @patch("trading.main.TradeManager")
+    @patch("trading.main.config")
+    @patch("trading.main.get_logger")
+    @patch("trading.main.sys.exit")
+    def test_run_bot_success(
+        self, mock_exit, mock_get_logger, mock_config, mock_trade_manager, mock_coinbase_client
+    ):
         """Test successful execution of run_bot with multiple assets."""
-        # Create mocks for all modules imported within run_bot
-        mock_cc_module = MagicMock()
-        mock_p_module = MagicMock()
-        mock_ta_module = MagicMock()
-        mock_sa_module = MagicMock()
-        mock_oc_module = MagicMock()
+        mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
+        mock_logger = mock_get_logger.return_value
+        mock_client_instance = mock_coinbase_client.return_value
+        mock_tm_instance = mock_trade_manager.return_value
 
-        # Mock the TradeManager class separately
-        mock_tm_class = MagicMock()
+        main.run_bot()
 
-        # Set up the mocks for the 'trading' package structure
-        mock_trading_pkg = MagicMock()
-        mock_trading_pkg.signal_analyzer = mock_sa_module
-        mock_trading_pkg.order_calculator = mock_oc_module
-        mock_trading_pkg.TradeManager = mock_tm_class
+        mock_coinbase_client.assert_called_once_with()
+        mock_logger.info.assert_any_call("Coinbase client initialized successfully.")
 
-        mock_modules = {
-            "trading.coinbase_client": mock_cc_module,
-            "trading.persistence": mock_p_module,
-            "trading.technical_analysis": mock_ta_module,
-            "trading.signal_analyzer": mock_sa_module,
-            "trading.order_calculator": mock_oc_module,
-            "trading.trade_manager": MagicMock(TradeManager=mock_tm_class),
-        }
+        mock_trade_manager.assert_called_once_with(
+            client=mock_client_instance,
+            persistence_manager=main.persistence,
+            ta_module=main.technical_analysis,
+            config_module=mock_config,
+            logger=mock_logger,
+            signal_analyzer=main.signal_analyzer,
+            order_calculator=main.order_calculator,
+        )
 
-        with patch.dict("sys.modules", mock_modules), patch(
-            "trading.main.config"
-        ) as mock_config, patch("trading.main.get_logger") as mock_get_logger, patch(
-            "trading.main.sys.exit"
-        ) as mock_sys_exit:
-            # --- Setup Mocks ---
-            mock_config.LOG_LEVEL = "DEBUG"
-            mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
-            mock_logger = mock_get_logger.return_value
-            mock_client_instance = mock_cc_module.CoinbaseClient.return_value
-            mock_trade_manager_instance = mock_tm_class.return_value
+        self.assertEqual(mock_tm_instance.process_asset_trade_cycle.call_count, 2)
+        mock_tm_instance.process_asset_trade_cycle.assert_has_calls([
+            call(asset_id="BTC-USD"),
+            call(asset_id="ETH-USD"),
+        ])
+        mock_exit.assert_not_called()
 
-            # --- Run the function ---
-            main.run_bot()
-
-            # --- Assertions ---
-            mock_get_logger.assert_called_once_with()
-            mock_logger.info.assert_any_call(
-                "--- Starting v6 crypto trading bot run ---"
-            )
-            mock_cc_module.CoinbaseClient.assert_called_once_with()
-            mock_logger.info.assert_any_call(
-                "Coinbase client initialized successfully."
-            )
-
-            # Verify TradeManager was initialized correctly
-            mock_tm_class.assert_called_once_with(
-                client=mock_client_instance,
-                persistence_manager=mock_p_module,
-                ta_module=mock_ta_module,
-                config_module=mock_config,
-                logger=mock_logger,
-                signal_analyzer=mock_sa_module,
-                order_calculator=mock_oc_module,
-            )
-
-            # Verify the processing loop
-            mock_logger.info.assert_any_call("Processing 2 configured trading pairs.")
-            self.assertEqual(
-                mock_trade_manager_instance.process_asset_trade_cycle.call_count, 2
-            )
-            expected_calls = [call(asset_id="BTC-USD"), call(asset_id="ETH-USD")]
-            mock_trade_manager_instance.process_asset_trade_cycle.assert_has_calls(
-                expected_calls, any_order=True
-            )
-
-            # Verify logging for each asset cycle
-            mock_logger.info.assert_any_call("--- Starting trade cycle for BTC-USD ---")
-            mock_logger.info.assert_any_call(
-                "--- Completed trade cycle for BTC-USD ---"
-            )
-            mock_logger.info.assert_any_call("--- Starting trade cycle for ETH-USD ---")
-            mock_logger.info.assert_any_call(
-                "--- Completed trade cycle for ETH-USD ---"
-            )
-            mock_logger.info.assert_any_call(unittest.mock.ANY)
-            mock_sys_exit.assert_not_called()
-
-    def test_run_bot_client_initialization_failure(self):
+    @patch("trading.main.coinbase_client.CoinbaseClient")
+    @patch("trading.main.config")
+    @patch("trading.main.get_logger")
+    @patch("trading.main.sys.exit")
+    def test_run_bot_client_initialization_failure(
+        self, mock_exit, mock_get_logger, mock_config, mock_coinbase_client
+    ):
         """Test run_bot exits when CoinbaseClient initialization fails."""
-        mock_cc_module = MagicMock()
+        mock_logger = mock_get_logger.return_value
         error_message = "Invalid API keys"
-        mock_cc_module.CoinbaseClient.side_effect = RuntimeError(error_message)
+        mock_coinbase_client.side_effect = RuntimeError(error_message)
 
-        mock_modules = {"trading.coinbase_client": mock_cc_module}
+        main.run_bot()
 
-        with patch.dict("sys.modules", mock_modules), patch(
-            "trading.main.get_logger"
-        ) as mock_get_logger, patch("trading.main.sys.exit") as mock_sys_exit, patch(
-            "trading.main.config"
-        ) as mock_config:
-            mock_config.LOG_LEVEL = "DEBUG"
+        mock_logger.critical.assert_called_once_with(
+            f"A critical error occurred during bot initialization: {error_message}",
+            exc_info=True,
+        )
+        mock_exit.assert_called_once_with(1)
 
-            mock_logger = MagicMock()
-            mock_get_logger.return_value = mock_logger
-
-            main.run_bot()
-
-            mock_logger.critical.assert_called_once_with(
-                f"A critical error occurred during bot initialization: {error_message}",
-                exc_info=True,
-            )
-            mock_sys_exit.assert_called_once_with(1)
-
-    def test_run_bot_asset_processing_error_continues(self):
+    @patch("trading.main.coinbase_client.CoinbaseClient")
+    @patch("trading.main.TradeManager")
+    @patch("trading.main.config")
+    @patch("trading.main.get_logger")
+    @patch("trading.main.sys.exit")
+    def test_run_bot_asset_processing_error_continues(
+        self, mock_exit, mock_get_logger, mock_config, mock_trade_manager, mock_coinbase_client
+    ):
         """Test that an error in one asset doesn't stop the next one."""
-        mock_cc_module = MagicMock()
-        mock_tm_module = MagicMock()
-        mock_p_module = MagicMock()
-        mock_sa_module = MagicMock()
-        mock_oc_module = MagicMock()
-        mock_ta_module = MagicMock()
+        mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
+        mock_logger = mock_get_logger.return_value
+        mock_tm_instance = mock_trade_manager.return_value
+        error_message = "Test processing error"
+        mock_tm_instance.process_asset_trade_cycle.side_effect = [
+            Exception(error_message),
+            None,  # Success for the second asset
+        ]
 
-        mock_modules = {
-            "trading.coinbase_client": mock_cc_module,
-            "trading.trade_manager": mock_tm_module,
-            "trading.persistence": mock_p_module,
-            "trading.signal_analyzer": mock_sa_module,
-            "trading.order_calculator": mock_oc_module,
-            "trading.technical_analysis": mock_ta_module,
-        }
+        main.run_bot()
 
-        with patch.dict("sys.modules", mock_modules), patch(
-            "trading.main.config"
-        ) as mock_config, patch("trading.main.get_logger") as mock_get_logger, patch(
-            "trading.main.sys.exit"
-        ) as mock_sys_exit:
-            mock_logger = MagicMock()
-            mock_get_logger.return_value = mock_logger
-            mock_trade_manager_instance = mock_tm_module.TradeManager.return_value
-            mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
-            mock_config.LOG_LEVEL = "DEBUG"
+        self.assertEqual(mock_trade_manager.call_count, 1)
+        self.assertEqual(mock_tm_instance.process_asset_trade_cycle.call_count, 2)
 
-            error_message = "Test processing error"
-            mock_trade_manager_instance.process_asset_trade_cycle.side_effect = [
-                Exception(error_message),
-                None,  # Success for the second asset
-            ]
-
-            main.run_bot()
-
-            self.assertEqual(
-                mock_trade_manager_instance.process_asset_trade_cycle.call_count, 2
-            )
-            mock_logger.error.assert_called_once_with(
-                f"An unexpected error occurred while processing asset BTC-USD: "
-                f"{error_message}",
-                exc_info=True,
-            )
-            # Check that the second asset was still processed
-            mock_trade_manager_instance.process_asset_trade_cycle.assert_any_call(
-                asset_id="ETH-USD"
-            )
-            mock_logger.info.assert_any_call(
-                "--- Completed trade cycle for BTC-USD ---"
-            )
-            mock_logger.info.assert_any_call(
-                "--- Completed trade cycle for ETH-USD ---"
-            )
-            mock_sys_exit.assert_not_called()
+        mock_logger.error.assert_called_once_with(
+            "An unexpected error occurred while processing asset BTC-USD: Test processing error",
+            exc_info=True,
+        )
+        mock_exit.assert_not_called()
 
 
 if __name__ == "__main__":

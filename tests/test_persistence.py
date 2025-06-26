@@ -94,7 +94,7 @@ class TestPersistence(unittest.TestCase):
         mock_json_load.assert_called_once_with(mock_file_open())
         self.assertEqual(loaded_data, expected_data)
 
-    @patch("persistence.os.path.exists")
+    @patch("trading.persistence.os.path.exists")
     def test_load_trade_state_file_not_found(self, mock_os_exists):
         """Test load_trade_state returns empty dict if file not found."""
         mock_os_exists.return_value = False
@@ -130,9 +130,9 @@ class TestPersistence(unittest.TestCase):
         mock_json_load.assert_called_once_with(mock_file_open())
         self.assertEqual(loaded_data, {})
 
-    @patch("persistence.os.path.exists")
-    @patch("persistence.open", new_callable=mock_open)
-    @patch("persistence.json.load")
+    @patch("trading.persistence.os.path.exists")
+    @patch("trading.persistence.open", new_callable=mock_open)
+    @patch("trading.persistence.json.load")
     def test_load_trade_state_corrupted_data_not_dict(
         self, mock_json_load, mock_file_open, mock_os_exists
     ):
@@ -175,7 +175,7 @@ class TestPersistence(unittest.TestCase):
         }
         mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_load_open_buy_order_success(self, mock_load_trade_state):
         """Test load_open_buy_order successfully retrieves order details."""
         asset_id = "ETH-USD"
@@ -187,7 +187,7 @@ class TestPersistence(unittest.TestCase):
         mock_load_trade_state.assert_called_once_with(asset_id)
         self.assertEqual(result, order_details)
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_load_open_buy_order_not_found(self, mock_load_trade_state):
         """Test load_open_buy_order returns None if no open order exists."""
         asset_id = "LTC-USD"
@@ -202,7 +202,7 @@ class TestPersistence(unittest.TestCase):
         result = persistence.load_open_buy_order(asset_id)
         self.assertIsNone(result)
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_load_open_buy_order_corrupted_data(self, mock_load_trade_state):
         """Test load_open_buy_order returns None if data is malformed."""
         asset_id = "XRP-USD"
@@ -275,7 +275,7 @@ class TestPersistence(unittest.TestCase):
         }
         mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_load_filled_buy_trade_success(self, mock_load_trade_state):
         """Test load_filled_buy_trade successfully retrieves trade details."""
         asset_id = "AVAX-USD"
@@ -287,7 +287,7 @@ class TestPersistence(unittest.TestCase):
         mock_load_trade_state.assert_called_once_with(asset_id)
         self.assertEqual(result, trade_details)
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_load_filled_buy_trade_not_found(self, mock_load_trade_state):
         """Test load_filled_buy_trade returns None if no filled trade exists."""
         asset_id = "MATIC-USD"
@@ -300,7 +300,7 @@ class TestPersistence(unittest.TestCase):
         mock_load_trade_state.return_value = {}  # Empty state
         self.assertIsNone(persistence.load_filled_buy_trade(asset_id))
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_load_filled_buy_trade_corrupted_data(self, mock_load_trade_state):
         """Test load_filled_buy_trade returns None if data is malformed."""
         asset_id = "LINK-USD"
@@ -418,7 +418,7 @@ class TestPersistence(unittest.TestCase):
             asset_id, {"filled_buy_trade": expected_filled_trade}
         )
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_add_sell_order_no_filled_trade(self, mock_load_trade_state):
         """Test add_sell_order raises ValueError if no filled trade exists."""
         asset_id = "FIL-USD"
@@ -500,7 +500,7 @@ class TestPersistence(unittest.TestCase):
             asset_id, {"filled_buy_trade": expected_filled_trade}
         )
 
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.load_trade_state")
     def test_update_sell_order_status_no_filled_trade(self, mock_load_trade_state):
         """Test update_sell_order_status raises ValueError if no filled trade."""
         asset_id = "COMP-USD"

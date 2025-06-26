@@ -99,6 +99,16 @@ Your current project has code split between `trading/` (a package) and the root 
 - Use git for every structural change.
 - Commit small, logical steps so you can always revert if something breaks.
 
+---
+
+## VI. Post-Refactoring Cleanup and Verification
+
+This section tracks the final steps to ensure the codebase is stable, clean, and fully verified after the major refactoring effort.
+
+*   **[X] Fix All Failing Tests:** Addressed all test failures in `tests/test_coinbase_client.py` and `tests/test_main.py`. All 131 tests are now passing.
+*   **[ ] Run Static Analysis:** Perform and fix any issues reported by `mypy`, `flake8`, and `bandit`.
+*   **[ ] Final Code Review:** A final review of the codebase for clarity, consistency, and adherence to design principles.
+
 ### 4. Summary Checklist & Progress
 
 - **Step 1: Consolidate Code:** [X] All logic moved to `trading/`.

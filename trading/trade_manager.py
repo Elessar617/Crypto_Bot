@@ -228,8 +228,7 @@ class TradeManager:
                     f"{i + 1}/{len(sell_order_params)}: size={size}, price={price}"
                 )
                 client_order_id = self.client._generate_client_order_id()
-                order_result = self.client.limit_order(
-                    side="SELL",
+                order_result = self.client.limit_order_sell(
                     product_id=asset_id,
                     base_size=str(size),
                     limit_price=str(price),
@@ -397,8 +396,7 @@ class TradeManager:
 
             # 5. Place the buy order
             client_order_id = self.client._generate_client_order_id()
-            order_result = self.client.limit_order(
-                side="BUY",
+            order_result = self.client.limit_order_buy(
                 product_id=asset_id,
                 base_size=str(size),
                 limit_price=str(limit_price),
