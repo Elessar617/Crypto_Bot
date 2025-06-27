@@ -3,6 +3,7 @@
 import json
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 
 
@@ -111,38 +112,65 @@ class CoinbaseClient:
             self._log_api_error("get_accounts", e)
             return None
 
-    def get_product_candles(
+    def get_public_candles(
         self,
         product_id: str,
         granularity: str,
         start: Optional[str] = None,
         end: Optional[str] = None,
     ) -> Optional[List[Dict[str, Any]]]:
-        """Retrieves historical candles for a product."""
-        self.logger.debug(f"Attempting to retrieve candles for {product_id}.")
+        """Fetches historical candle data for a product."""
         try:
             assert self.client is not None, "RESTClient not initialized."
             assert product_id, "Product ID must be a non-empty string."
 
-            response = self.client.get_product_candles(
-                product_id=product_id, start_date=start, end_date=end, granularity=granularity
+            # If no start/end is provided, fetch the last 300 candles.
+            if not start or not end:
+                granularity_map = {
+                    "ONE_MINUTE": timedelta(minutes=1),
+                    "FIVE_MINUTE": timedelta(minutes=5),
+                    "FIFTEEN_MINUTE": timedelta(minutes=15),
+                    "THIRTY_MINUTE": timedelta(minutes=30),
+                    "ONE_HOUR": timedelta(hours=1),
+                    "TWO_HOUR": timedelta(hours=2),
+                    "SIX_HOUR": timedelta(hours=6),
+                    "ONE_DAY": timedelta(days=1),
+                }
+                candle_duration = granularity_map.get(granularity)
+                if not candle_duration:
+                    self.logger.error(
+                        f"Unsupported granularity for candle calculation: {granularity}"
+                    )
+                    return None
+
+                end_dt = datetime.now(timezone.utc)
+                start_dt = end_dt - (candle_duration * 300)
+                # The API expects UNIX timestamps as strings.
+                start_ts = str(int(start_dt.timestamp()))
+                end_ts = str(int(end_dt.timestamp()))
+            else:
+                start_ts = start
+                end_ts = end
+
+            response = self.client.get_public_candles(
+                product_id=product_id,
+                start=start_ts,
+                end=end_ts,
+                granularity=granularity,
             )
             response_dict = self._handle_api_response(response)
 
-            assert isinstance(
-                response_dict, dict
-            ), "get_product_candles response should be a dictionary."
-            candles = response_dict.get("candles")
+            if not response_dict or "candles" not in response_dict:
+                self.logger.warning(f"No candle data in response for {product_id}.")
+                return None
 
-            assert candles is not None, "'candles' key missing in response."
-            assert isinstance(candles, list), "'candles' key must be a list."
-
+            candles = response_dict["candles"]
             self.logger.info(
                 f"Successfully retrieved {len(candles)} candles for {product_id}."
             )
             return candles
-        except (HTTPError, RequestException, Exception) as e:
-            self._log_api_error(f"get_product_candles for {product_id}", e)
+        except (TypeError, AttributeError, Exception) as e:
+            self._log_api_error(f"get_public_candles for {product_id}", e)
             return None
 
     def get_product_book(

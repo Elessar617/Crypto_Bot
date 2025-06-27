@@ -13,16 +13,16 @@ import sys
 import time
 
 # Local application imports
-from . import (
+from trading import (
     coinbase_client,
     config,
     order_calculator,
-    persistence,
     signal_analyzer,
     technical_analysis,
 )
-from .logger import LoggerDirectoryError, get_logger, setup_logging
-from .trade_manager import TradeManager
+from trading.logger import LoggerDirectoryError, get_logger, setup_logging
+from trading.persistence import PersistenceManager
+from trading.trade_manager import TradeManager
 
 
 def run_bot() -> None:
@@ -52,9 +52,10 @@ def run_bot() -> None:
         assert config.TRADING_PAIRS, "Configuration error: TRADING_PAIRS is empty."
 
         client = coinbase_client.CoinbaseClient()
+        persistence_manager = PersistenceManager(logger=logger)
         trade_manager = TradeManager(
             client=client,
-            persistence_manager=persistence,
+            persistence_manager=persistence_manager,
             ta_module=technical_analysis,
             config_module=config,
             logger=logger,

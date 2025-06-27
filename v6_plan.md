@@ -112,7 +112,8 @@ This section tracks the final steps to ensure the codebase is stable, clean, and
     *   Updated `TradeManager` to use the new `PersistenceManager` instance.
     *   Refactored the test suite in `tests/test_trade_manager.py` to mock the `PersistenceManager` class and align with the new architecture.
     *   Resolved all related test failures, ensuring the system is stable.
-*   **[ ] Final Code Review:** **(CURRENT STEP)** A final review of the codebase for clarity, consistency, and adherence to design principles.
+*   **[X] Smoke Test:** Successfully ran the bot in a live environment, fetching market data and executing the full trade cycle without runtime errors.
+*   **[ ] Final Code Review:** A final review of the codebase for clarity, consistency, and adherence to design principles.
 
 ### 4. Summary Checklist & Progress
 
@@ -122,11 +123,11 @@ This section tracks the final steps to ensure the codebase is stable, clean, and
 - **Step 4: Run Bot (Smoke Test):** [X] Run the bot and validate it runs successfully in the live environment, fixing all runtime errors.
 - **Step 5: Resolve Test Setup:** [X] Add `pyproject.toml` and install in editable mode to resolve `ModuleNotFoundError` during test collection.
 - **Step 6: Final Verification:** [X] Run the full `pytest` suite and all static analysis tools (`mypy`, `flake8`, `bandit`) to confirm the codebase is stable and clean.
-- **Step 7: Final Code Review:** [ ] **(CURRENT STEP)** Conduct a final review of the codebase for clarity, consistency, and adherence to design principles.
+- **Step 7: Final Code Review:** [ ] Conduct a final review of the codebase for clarity, consistency, and adherence to design principles.
 
 ---
 
-## VI. Future Roadmap & Advanced Testing
+## VII. Future Roadmap & Advanced Testing
 
 This section outlines potential future work, including advanced testing strategies and new features.
 
@@ -150,7 +151,7 @@ To measure the *quality* and *effectiveness* of our tests, not just their quanti
 *   **Goal:** Ensure that our test suite can detect small, intentionally introduced bugs (mutations).
 *   **Tool:** We will use `mutmut` for Python.
 *   **Next Steps:**
-    *   [ ] Resume Mutation Testing: Restart `mutmut` on the refactored `coinbase_client.py` to get a new baseline score.
+    *   [ ] **(CURRENT STEP)** Resume Mutation Testing: Restart `mutmut` on the refactored `coinbase_client.py` to get a new baseline score.
     *   [ ] Analyze surviving mutants and write targeted tests.
     *   [ ] Continue iterating until mutation score is satisfactory for Tier 1 modules.
 

@@ -365,7 +365,7 @@ class TradeManager:
         Returns candle data if a buy signal is present, otherwise None.
         """
         try:
-            candles = self.client.get_product_candles(
+            candles = self.client.get_public_candles(
                 asset_id, granularity=config_asset_params["candle_granularity_api_name"]
             )
             if not candles:
