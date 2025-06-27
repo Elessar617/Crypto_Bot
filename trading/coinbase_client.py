@@ -152,24 +152,33 @@ class CoinbaseClient:
                 start_ts = start
                 end_ts = end
 
-            response = self.client.get_public_candles(
+            response = self.client.get_product_candles(
                 product_id=product_id,
                 start=start_ts,
                 end=end_ts,
                 granularity=granularity,
             )
-            response_dict = self._handle_api_response(response)
-
-            if not response_dict or "candles" not in response_dict:
-                self.logger.warning(f"No candle data in response for {product_id}.")
+            if not isinstance(response, dict):
+                self.logger.error(
+                    f"An error occurred in get_public_candles for {product_id}: Response was not a dictionary.",
+                    exc_info=True,
+                )
                 return None
 
-            candles = response_dict["candles"]
+            candles = response.get("candles")
+
+            if not isinstance(candles, list):
+                self.logger.error(
+                    f"An error occurred in get_public_candles for {product_id}: 'candles' key must be a list.",
+                    exc_info=True,
+                )
+                return None
+
             self.logger.info(
                 f"Successfully retrieved {len(candles)} candles for {product_id}."
             )
             return candles
-        except (TypeError, AttributeError, Exception) as e:
+        except (HTTPError, RequestException, Exception) as e:
             self._log_api_error(f"get_public_candles for {product_id}", e)
             return None
 
@@ -257,12 +266,19 @@ class CoinbaseClient:
             assert product_id, "Product ID must be a non-empty string."
             assert self.client is not None, "RESTClient not initialized."
 
+            order_configuration = {
+                "limit_limit_gtc": {
+                    "base_size": base_size,
+                    "limit_price": limit_price,
+                    "post_only": False,
+                }
+            }
+
             response = self.client.limit_order(
+                side=side.upper(),
                 client_order_id=client_order_id,
                 product_id=product_id,
-                side=side.upper(),
-                base_size=base_size,
-                limit_price=limit_price,
+                order_configuration=order_configuration,
             )
             response_dict = self._handle_api_response(response)
 

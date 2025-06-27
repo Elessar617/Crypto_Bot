@@ -59,43 +59,53 @@ This section tracks the initial development progress of the Crypto Trading Bot v
 
 ---
 
-## V. Active Refactoring Plan
+## V. Post-Development Maintenance & Testing
+
+This section outlines ongoing efforts to improve the project's structure, stability, and test coverage after the initial development phase.
+
+### 1. Mutation Testing (`trading/coinbase_client.py`)
+
+- **Objective:** Systematically kill all surviving mutants in the `trading/coinbase_client.py` module to ensure maximum test coverage and code robustness.
+- **Status:** **COMPLETED**
+- **Outcome:** 100% mutation coverage achieved. All 163 mutants were successfully killed by adding a comprehensive suite of targeted unit tests. The test suite now stands at 159 passing tests.
+
+### 2. Active Refactoring Plan
 
 This section outlines the current, active refactoring effort to improve the project's structure and stability.
 
-### 1. Current Structure Analysis
+#### a. Current Structure Analysis
 
 Your current project has code split between `trading/` (a package) and the root directory, with an extensive `tests/` suite. This structure leads to import confusion, frequent test breakages after refactor, and constant “fixing” without forward progress.
 
-### 2. Main Problems Identified
+#### b. Main Problems Identified
 
 - **Split Codebase:** Core logic is divided between the `trading/` package and the project root.
 - **Import Hell:** Refactoring breaks imports, leading to endless `ModuleNotFoundError` issues.
 - **Mixed Import Styles:** Using both absolute and relative imports causes failures when running as a script vs. as a package.
 - **Testing and Static Checks Fail:** Tools like pytest and mypy expect a consistent package structure.
 
-### 3. The Refactor Plan
+#### c. The Refactor Plan
 
-#### Step 1: Consolidate All Code into One Package
+##### Step 1: Consolidate All Code into One Package
 - Move all `.py` files for your core logic into `trading/`.
 - Leave only entry points (like `main.py`), configuration, and documentation in the project root.
 
-#### Step 2: Fix All Imports
+##### Step 2: Fix All Imports
 - Use **only absolute imports** within your code and tests.
   **Example:**
   `from trading.coinbase_client import CoinbaseClient`
 - Never use relative imports (`from .foo import bar`).
 
-#### Step 3: Run Everything From the Project Root
+##### Step 3: Run Everything From the Project Root
 - To run the bot: `python -m trading.main`
 - To run tests: `pytest`
 
-#### Step 4: Maintain Consistency
+##### Step 4: Maintain Consistency
 - New modules go in `trading/`, not in the root.
 - Entry point (`main.py`) just launches the bot, all business logic stays in the package.
 - Fix imports **everywhere** as you move modules.
 
-#### Step 5: Version Control Your Changes
+##### Step 5: Version Control Your Changes
 - Use git for every structural change.
 - Commit small, logical steps so you can always revert if something breaks.
 
@@ -127,7 +137,6 @@ This section tracks the final steps to ensure the codebase is stable, clean, and
     *   Refactored the test suite in `tests/test_trade_manager.py` to mock the `PersistenceManager` class and align with the new architecture.
     *   Resolved all related test failures, ensuring the system is stable.
 *   **[X] Smoke Test:** Successfully ran the bot in a live environment, fetching market data and executing the full trade cycle without runtime errors.
-*   **[ ] Final Code Review:** A final review of the codebase for clarity, consistency, and adherence to design principles.
 
 ### 4. Summary Checklist & Progress
 
@@ -137,7 +146,6 @@ This section tracks the final steps to ensure the codebase is stable, clean, and
 - **Step 4: Run Bot (Smoke Test):** [X] Run the bot and validate it runs successfully in the live environment, fixing all runtime errors.
 - **Step 5: Resolve Test Setup:** [X] Add `pyproject.toml` and install in editable mode to resolve `ModuleNotFoundError` during test collection.
 - **Step 6: Final Verification:** [X] Run the full `pytest` suite and all static analysis tools (`mypy`, `flake8`, `bandit`) to confirm the codebase is stable and clean.
-- **Step 7: Final Code Review:** [ ] Conduct a final review of the codebase for clarity, consistency, and adherence to design principles.
 
 ---
 
@@ -180,3 +188,7 @@ To measure the *quality* and *effectiveness* of our tests, not just their quanti
 *   [ ] Enhance the bot with new strategies or indicators.
 *   [ ] Pursue performance optimizations or other code improvements.
 *   [ ] Prepare the bot for a live production environment with robust deployment scripts.
+
+### 4. Final Code Review
+
+*   [ ] **Final Code Review:** After all advanced testing (including mutation testing) is complete, conduct a final review of the entire codebase for clarity, consistency, and adherence to design principles.
