@@ -302,8 +302,8 @@ class TestCoinbaseClient(unittest.TestCase):
         self.assertEqual(result, [{"open": "100"}])
         self.mock_rest_client_instance.get_public_candles.assert_called_once_with(
             product_id="BTC-USD",
-            start_date="2023-01-01",
-            end_date="2023-01-02",
+            start="2023-01-01",
+            end="2023-01-02",
             granularity="ONE_HOUR",
         )
         self.mock_logger_instance.info.assert_called_once_with(
