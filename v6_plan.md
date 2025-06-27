@@ -69,7 +69,15 @@ This section outlines ongoing efforts to improve the project's structure, stabil
 - **Status:** **COMPLETED**
 - **Outcome:** 100% mutation coverage achieved. All 163 mutants were successfully killed by adding a comprehensive suite of targeted unit tests. The test suite now stands at 159 passing tests.
 
-### 2. Active Refactoring Plan
+### 2. Code Cleanup & Logging Enhancements
+
+- **Objective:** Continuously improve code readability and diagnostics.
+- **Status:** **Ongoing**
+- **Latest Changes:**
+  - Added an `INFO` level log for the raw API response in `get_public_candles` to improve debugging visibility.
+  - Removed a stray `print` statement from the error handling block in `get_public_candles`.
+
+### 3. Active Refactoring Plan
 
 This section outlines the current, active refactoring effort to improve the project's structure and stability.
 

@@ -152,20 +152,22 @@ class CoinbaseClient:
                 start_ts = start
                 end_ts = end
 
-            response = self.client.get_product_candles(
+            response = self.client.get_public_candles(
                 product_id=product_id,
                 start=start_ts,
                 end=end_ts,
                 granularity=granularity,
             )
-            if not isinstance(response, dict):
+            self.logger.info(f"Raw response from get_public_candles: {response}")
+            response_dict = self._handle_api_response(response)
+
+            if not isinstance(response_dict, dict):
                 self.logger.error(
-                    f"An error occurred in get_public_candles for {product_id}: Response was not a dictionary.",
-                    exc_info=True,
+                    f"An error occurred in get_public_candles for {product_id}: Response was not a dictionary."
                 )
                 return None
 
-            candles = response.get("candles")
+            candles = response_dict.get("candles")
 
             if not isinstance(candles, list):
                 self.logger.error(
