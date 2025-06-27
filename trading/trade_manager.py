@@ -18,7 +18,7 @@ class TradeManager:
     def __init__(
         self,
         client: CoinbaseClient,
-        persistence_manager: Any,
+        persistence_manager: PersistenceManager,
         ta_module: Any,
         config_module: Any,
         logger: logging.Logger,
@@ -83,7 +83,9 @@ class TradeManager:
                 config_asset_params,
             )
         elif open_buy_order:
-            self._handle_open_buy_order(asset_id, open_buy_order, product_details)
+            self._handle_open_buy_order(
+                asset_id, open_buy_order, product_details, config_asset_params
+            )
         else:
             self._handle_new_buy_order(
                 asset_id,
@@ -130,66 +132,81 @@ class TradeManager:
         config_asset_params: Dict[str, Any],
     ) -> None:
         """Manages sell-side logic for a filled buy trade."""
+        buy_order_id = filled_buy_trade.get("buy_order_id")
+        if not buy_order_id:
+            self.logger.error(f"[{asset_id}] Corrupted trade state: buy_order_id missing.")
+            return
+
         sell_orders = filled_buy_trade.get("associated_sell_orders", [])
         if sell_orders:
-            self._check_and_update_sell_orders(asset_id, sell_orders)
+            self._check_and_update_sell_orders(
+                asset_id=asset_id,
+                buy_order_id=buy_order_id,
+                sell_orders=sell_orders,
+            )
         else:
             self._place_new_sell_orders(
-                asset_id, filled_buy_trade, product_details, config_asset_params
+                asset_id=asset_id,
+                filled_buy_trade=filled_buy_trade,
+                product_details=product_details,
+                config_asset_params=config_asset_params,
             )
 
-    def _check_and_update_sell_orders(self, asset_id: str, sell_orders: list) -> None:
+    def _check_and_update_sell_orders(
+        self, asset_id: str, buy_order_id: str, sell_orders: list
+    ) -> None:
         """Checks status of open sell orders and updates persistence."""
-        self.logger.info(
-            f"[{asset_id}] Checking status of {len(sell_orders)} sell orders."
-        )
-        try:
-            all_filled = True
-            updated_orders_details = []
+        if not sell_orders:
+            return
 
-            for order in sell_orders:
-                order_id = order["order_id"]
-                order_details = self.client.get_order(order_id)
+        all_orders_filled = True
+        for order in sell_orders:
+            order_id = order.get("order_id")
+            if not order_id:
+                self.logger.warning(f"[{asset_id}] Skipping sell order with no ID.")
+                continue
 
-                if not order_details or "status" not in order_details:
-                    self.logger.error(
-                        f"[{asset_id}] Could not retrieve status for order {order_id}. "
-                        "Keeping old status."
+            current_status = order.get("status", "OPEN")
+            if current_status == "FILLED":
+                continue
+
+            try:
+                updated_order = self.client.get_order(order_id)
+                if not updated_order:
+                    self.logger.warning(
+                        f"[{asset_id}] Failed to get status for sell order {order_id}."
                     )
-                    updated_orders_details.append(order)  # Keep original if fetch fails
-                    all_filled = False
+                    all_orders_filled = False
                     continue
 
-                status = order_details["status"]
-                self.logger.info(f"[{asset_id}] Sell order {order_id} status: {status}")
-
-                if status != "FILLED":
-                    all_filled = False
-
-                updated_orders_details.append({"order_id": order_id, "status": status})
-
-            if all_filled:
-                self.logger.info(
-                    f"[{asset_id}] All sell orders are filled. " "Trade cycle complete."
-                )
-                self.persistence_manager.clear_filled_buy_trade(asset_id)
-            else:
-                self.logger.info(
-                    f"[{asset_id}] Not all sell orders are filled. Updating status."
-                )
-                trade_state = self.persistence_manager.load_trade_state(asset_id)
-                if trade_state.get("filled_buy_trade"):
-                    trade_state["filled_buy_trade"][
-                        "associated_sell_orders"
-                    ] = updated_orders_details
-                    self.persistence_manager.save_filled_buy_trade(
-                        asset_id, trade_state["filled_buy_trade"]
+                new_status = updated_order.get("status")
+                if current_status != new_status:
+                    self.logger.info(
+                        f"[{asset_id}] Sell order {order_id} status updated to {new_status}."
                     )
-        except Exception as e:
-            self.logger.error(
-                f"[{asset_id}] Exception checking sell orders: {e}",
-                exc_info=True,
+                    self.persistence_manager.update_sell_order_status_in_filled_trade(
+                        asset_id=asset_id,
+                        buy_order_id=buy_order_id,
+                        sell_order_id=order_id,
+                        new_status=new_status,
+                    )
+                    order["status"] = new_status
+
+                if new_status != "FILLED":
+                    all_orders_filled = False
+
+            except Exception as e:
+                self.logger.error(
+                    f"[{asset_id}] Error checking sell order {order_id}: {e}",
+                    exc_info=True,
+                )
+                all_orders_filled = False
+
+        if all_orders_filled:
+            self.logger.info(
+                f"[{asset_id}] All sell orders are filled. Clearing trade state."
             )
+            self.persistence_manager.clear_filled_buy_trade(asset_id=asset_id)
 
     def _place_new_sell_orders(
         self,
@@ -201,25 +218,24 @@ class TradeManager:
         """Calculates and places new tiered sell orders."""
         self.logger.info(f"[{asset_id}] Placing new sell orders.")
         try:
-            buy_price = float(filled_buy_trade["buy_price"])
-            buy_quantity = float(filled_buy_trade["buy_quantity"])
+            buy_price = Decimal(str(filled_buy_trade["buy_price"]))
+            buy_quantity = Decimal(str(filled_buy_trade["buy_quantity"]))
 
             sell_order_params = self.order_calculator.determine_sell_orders_params(
-                buy_price,
-                buy_quantity,
-                product_details,
-                config_asset_params,
-                self.logger,
+                buy_price=buy_price,
+                buy_quantity=buy_quantity,
+                sell_profit_tiers=config_asset_params["sell_profit_tiers"],
+                product_details=product_details,
+                logger=self.logger,
             )
 
             if not sell_order_params:
                 self.logger.error(
-                    f"[{asset_id}] No sell orders were generated. "
-                    "Check config and logs."
+                    f"[{asset_id}] No sell orders were generated. Check config and logs."
                 )
                 return
 
-            sell_orders_to_save = []
+            placed_orders = 0
             for i, params in enumerate(sell_order_params):
                 size = params["base_size"]
                 price = params["limit_price"]
@@ -241,31 +257,30 @@ class TradeManager:
                         self.logger.info(
                             f"[{asset_id}] Successfully placed sell order {order_id}."
                         )
-                        sell_orders_to_save.append(
-                            {
-                                "order_id": order_id,
-                                "size": str(size),
-                                "price": str(price),
-                                "timestamp": time.time(),
-                            }
+                        sell_order_details = {
+                            "order_id": order_id,
+                            "size": str(size),
+                            "price": str(price),
+                            "timestamp": time.time(),
+                            "status": "OPEN",
+                        }
+                        self.persistence_manager.add_sell_order_to_filled_trade(
+                            asset_id=asset_id,
+                            buy_order_id=filled_buy_trade["buy_order_id"],
+                            sell_order_details=sell_order_details,
                         )
+                        placed_orders += 1
                 elif order_result:
                     error_response = order_result.get("error_response", {})
                     error_message = error_response.get("message", "No message")
                     self.logger.error(
-                        f"[{asset_id}] Failed to place sell order. "
-                        f"Reason: {error_message}"
+                        f"[{asset_id}] Failed to place sell order. Reason: {error_message}"
                     )
 
-            if sell_orders_to_save:
-                self.logger.info(
-                    f"[{asset_id}] Saving {len(sell_orders_to_save)} new sell orders "
-                    "to state."
-                )
-                self.persistence_manager.save_open_sell_orders(
-                    asset_id, sell_orders_to_save
-                )
-                self.persistence_manager.clear_filled_buy_trade(asset_id)
+            if placed_orders == 0:
+                self.logger.warning(f"[{asset_id}] No sell orders were successfully placed. The filled buy trade will be re-processed.")
+            else:
+                self.logger.info(f"[{asset_id}] Successfully placed and saved {placed_orders} sell orders.")
 
         except Exception as e:
             self.logger.error(
@@ -277,6 +292,7 @@ class TradeManager:
         asset_id: str,
         open_buy_order: Dict[str, Any],
         product_details: Dict[str, Any],
+        config_asset_params: Dict[str, Any],
     ) -> None:
         """Checks the status of an open buy order and handles it accordingly."""
         order_id = open_buy_order["order_id"]
@@ -292,19 +308,26 @@ class TradeManager:
             status = order_status.get("status")
             if status == "FILLED":
                 self.logger.info(f"[{asset_id}] Buy order {order_id} is filled.")
+
                 filled_size = Decimal(order_status.get("filled_size", "0"))
                 avg_price = Decimal(order_status.get("average_filled_price", "0"))
 
                 if filled_size > 0 and avg_price > 0:
-                    trade_data = {
-                        "buy_order_id": order_id,
-                        "timestamp": time.time(),
-                        "size": str(filled_size),
-                        "price": str(avg_price),
-                        "sell_orders": [],
-                    }
-                    self.persistence_manager.save_filled_buy_trade(asset_id, trade_data)
-                    self.persistence_manager.clear_open_buy_order(asset_id)
+                    sell_orders_params = self.order_calculator.determine_sell_orders_params(
+                        buy_price=avg_price,
+                        buy_quantity=filled_size,
+                        sell_profit_tiers=config_asset_params["sell_profit_tiers"],
+                        product_details=product_details,
+                        logger=self.logger,
+                    )
+
+                    self.persistence_manager.save_filled_buy_trade(
+                        asset_id=asset_id,
+                        buy_order_id=order_id,
+                        filled_order=order_status,
+                        sell_orders_params=sell_orders_params,
+                    )
+                    self.persistence_manager.clear_open_buy_order(asset_id=asset_id)
                     self.logger.info(
                         f"[{asset_id}] Saved filled trade data and cleared open buy order."
                     )
@@ -413,13 +436,14 @@ class TradeManager:
                     self.logger.info(
                         f"[{asset_id}] Successfully placed buy order {order_id}."
                     )
-                    open_order_data = {
-                        "order_id": order_id,
+                    buy_params = {
                         "timestamp": time.time(),
                         "size": str(size),
                         "price": str(limit_price),
                     }
-                    self.persistence_manager.save_open_buy_order(asset_id, open_order_data)
+                    self.persistence_manager.save_open_buy_order(
+                        asset_id=asset_id, order_id=order_id, order_details=buy_params
+                    )
             elif order_result:
                 error_response = order_result.get("error_response", {})
                 error_message = error_response.get("message", "No message")

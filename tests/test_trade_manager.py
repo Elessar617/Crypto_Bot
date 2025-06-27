@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import logging
 import time
-
 import unittest
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pandas as pd
 
 from trading.coinbase_client import CoinbaseClient
+from trading.persistence import PersistenceManager
 from trading.trade_manager import TradeManager
 
 
@@ -17,7 +17,7 @@ class TestTradeManager(unittest.TestCase):
     def setUp(self):
         """Set up a TradeManager instance with mocked dependencies."""
         self.mock_client = MagicMock(spec=CoinbaseClient)
-        self.mock_persistence = MagicMock()
+        self.mock_persistence = MagicMock(spec=PersistenceManager)
         self.mock_ta = MagicMock()
         self.mock_config = MagicMock()
         self.mock_logger = MagicMock(spec=logging.Logger)
@@ -111,7 +111,9 @@ class TestTradeManager(unittest.TestCase):
             limit_price="100.00",
         )
         self.mock_persistence.save_open_buy_order.assert_called_once_with(
-            "BTC-USD", unittest.mock.ANY
+            asset_id="BTC-USD",
+            order_id="order-123",
+            order_details={"timestamp": ANY, "size": "0.001", "price": "100.00"},
         )
 
     def test_handle_new_buy_order_does_not_place_order_on_no_signal(self):
@@ -158,8 +160,15 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
         self.mock_client.get_order.assert_called_once_with("order-123")
-        self.mock_persistence.save_filled_buy_trade.assert_called_once()
-        self.mock_persistence.clear_open_buy_order.assert_called_once_with("BTC-USD")
+        self.mock_persistence.save_filled_buy_trade.assert_called_once_with(
+            asset_id="BTC-USD",
+            buy_order_id="order-123",
+            filled_order=mock_order,
+            sell_orders_params=[],
+        )
+        self.mock_persistence.clear_open_buy_order.assert_called_once_with(
+            asset_id="BTC-USD"
+        )
 
     def test_handle_open_buy_order_is_still_open(self):
         """Test handling a buy order that is still open."""
@@ -208,20 +217,19 @@ class TestTradeManager(unittest.TestCase):
             product_id="BTC-USD",
             base_size="1.0",
             limit_price="102.00",
-            client_order_id=unittest.mock.ANY,
+            client_order_id=ANY,
         )
-        self.mock_persistence.save_open_sell_orders.assert_called_once_with(
-            "BTC-USD",
-            [
-                {
-                    "order_id": "sell-456",
-                    "size": "1.0",
-                    "price": "102.00",
-                    "timestamp": unittest.mock.ANY,
-                }
-            ],
+        self.mock_persistence.add_sell_order_to_filled_trade.assert_called_once_with(
+            asset_id="BTC-USD",
+            buy_order_id="buy-123",
+            sell_order_details={
+                "order_id": "sell-456",
+                "size": "1.0",
+                "price": "102.00",
+                "status": "OPEN",
+                "timestamp": ANY,
+            },
         )
-        self.mock_persistence.clear_filled_buy_trade.assert_called_once_with("BTC-USD")
 
     def test_handle_filled_buy_order_checks_existing_sell_orders(self):
         """Test checking the status of existing sell orders."""
@@ -242,4 +250,13 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
         self.mock_client.get_order.assert_called_once_with("sell-456")
-        self.mock_persistence.clear_filled_buy_trade.assert_called_once_with("BTC-USD")
+        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+            asset_id="BTC-USD",
+            buy_order_id="buy-123",
+            sell_order_id="sell-456",
+            new_status="FILLED",
+        )
+        # Since the only sell order is now filled, the trade should be cleared
+        self.mock_persistence.clear_filled_buy_trade.assert_called_once_with(
+            asset_id="BTC-USD"
+        )
