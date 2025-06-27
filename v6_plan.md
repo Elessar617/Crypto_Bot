@@ -101,6 +101,20 @@ Your current project has code split between `trading/` (a package) and the root 
 
 ---
 
+## VI. Post-Development Refinements & Testing
+
+This section tracks improvements and testing conducted after the initial v6 development was completed.
+
+*   **[X] Refactor `tests/test_persistence.py`:**
+    *   Updated all tests to use the `PersistenceManager` class instead of legacy procedural functions.
+    *   Corrected all mock patch targets to point to `PersistenceManager` methods.
+    *   Fixed all method signatures in tests to match the class-based API, resolving `TypeError` exceptions.
+    *   Added a `persistence_dir` argument to `PersistenceManager.__init__` to allow for isolated test execution.
+    *   Corrected validation logic in `load_open_buy_order` and `update_sell_order_status_in_filled_trade` to ensure tests pass.
+    *   Verified the entire test suite passes.
+
+---
+
 ## VI. Post-Refactoring Cleanup and Verification
 
 This section tracks the final steps to ensure the codebase is stable, clean, and fully verified after the major refactoring effort.

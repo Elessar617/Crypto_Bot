@@ -79,7 +79,7 @@ class TestTradeManager(unittest.TestCase):
             "quote_increment": "0.01",
             "base_min_size": "0.001",
         }
-        self.mock_client.get_product_candles.return_value = [
+        self.mock_client.get_public_candles.return_value = [
             {
                 "timestamp": time.time(),
                 "low": 99.0,
@@ -120,7 +120,7 @@ class TestTradeManager(unittest.TestCase):
         """Test that no order is placed if the buy signal is false."""
         # Arrange: No existing orders
         self.mock_persistence.load_trade_state.return_value = {}
-        self.mock_client.get_product_candles.return_value = [(0, 0, 0, 0, 100)] * 20
+        self.mock_client.get_public_candles.return_value = [(0, 0, 0, 0, 100)] * 20
         self.mock_ta.calculate_rsi.return_value = pd.Series([40, 45])
         self.mock_signal_analyzer.should_buy_asset.return_value = False
 

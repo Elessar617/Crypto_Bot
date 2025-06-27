@@ -12,13 +12,21 @@ from trading.logger import get_logger
 class PersistenceManager:
     """Manages reading and writing the bot's trade state to the filesystem."""
 
-    def __init__(self, logger: Optional[Any] = None) -> None:
-        """Initializes the PersistenceManager with an optional logger."""
+    def __init__(self, persistence_dir: Optional[str] = None, logger: Optional[Any] = None) -> None:
+        """
+        Initializes the PersistenceManager.
+
+        Args:
+            persistence_dir: The directory for storing persistence files.
+                             Defaults to PERSISTENCE_DIR from config.
+            logger: An optional logger instance.
+        """
+        self.persistence_dir = persistence_dir if persistence_dir else PERSISTENCE_DIR
         self.logger = logger if logger else get_logger()
 
     def _get_file_path(self, asset_id: str) -> str:
         """Constructs the file path for the asset's state file."""
-        return os.path.join(PERSISTENCE_DIR, f"{asset_id}_trade_state.json")
+        return os.path.join(self.persistence_dir, f"{asset_id}_trade_state.json")
 
     def save_trade_state(self, asset_id: str, state_data: Dict[str, Any]) -> None:
         """
@@ -37,11 +45,11 @@ class PersistenceManager:
 
         file_path = self._get_file_path(asset_id)
         assert os.path.isabs(file_path) or file_path.startswith(
-            PERSISTENCE_DIR
+            self.persistence_dir
         ), "File path construction seems incorrect."
 
         try:
-            os.makedirs(PERSISTENCE_DIR, exist_ok=True)
+            os.makedirs(self.persistence_dir, exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(state_data, f, indent=4)
             self.logger.debug(f"Successfully saved trade state for {asset_id} to {file_path}")
@@ -94,7 +102,14 @@ class PersistenceManager:
     def load_open_buy_order(self, asset_id: str) -> Optional[Dict[str, Any]]:
         """Loads the details of an open buy order."""
         trade_state = self.load_trade_state(asset_id)
-        return cast(Optional[Dict[str, Any]], trade_state.get("open_buy_order"))
+        open_order = trade_state.get("open_buy_order")
+        if (
+            not isinstance(open_order, dict)
+            or "order_id" not in open_order
+            or "params" not in open_order
+        ):
+            return None
+        return cast(Optional[Dict[str, Any]], open_order)
 
     def clear_open_buy_order(self, asset_id: str) -> None:
         """Clears any open buy order details."""
@@ -126,7 +141,10 @@ class PersistenceManager:
     def load_filled_buy_trade(self, asset_id: str) -> Optional[Dict[str, Any]]:
         """Loads the details of a filled buy trade."""
         trade_state = self.load_trade_state(asset_id)
-        return cast(Optional[Dict[str, Any]], trade_state.get("filled_buy_trade"))
+        filled_trade = trade_state.get("filled_buy_trade")
+        if not isinstance(filled_trade, dict):
+            return None
+        return cast(Optional[Dict[str, Any]], filled_trade)
 
     def clear_filled_buy_trade(self, asset_id: str) -> None:
         """Clears any filled buy trade details."""
@@ -143,9 +161,10 @@ class PersistenceManager:
         filled_trade = trade_state.get("filled_buy_trade")
 
         if not filled_trade or filled_trade.get("buy_order_id") != buy_order_id:
+            found_id = filled_trade.get('buy_order_id') if filled_trade else 'None'
             self.logger.error(
                 f"Attempted to add sell order to non-matching or non-existent buy trade "
-                f"for {asset_id} (expected {buy_order_id}, found {filled_trade.get('buy_order_id')})."
+                f"for {asset_id} (expected {buy_order_id}, found {found_id})."
             )
             raise ValueError(f"No matching filled buy trade found for {asset_id}.")
 
@@ -172,10 +191,7 @@ class PersistenceManager:
         filled_trade = trade_state.get("filled_buy_trade")
 
         if not filled_trade or filled_trade.get("buy_order_id") != buy_order_id:
-            self.logger.warning(
-                f"No matching filled trade found for {asset_id} to update sell order status."
-            )
-            return False
+            raise ValueError(f"No matching filled buy trade found for {asset_id}.")
 
         if "associated_sell_orders" not in filled_trade:
             self.logger.warning(f"No sell orders found for {asset_id} to update.")

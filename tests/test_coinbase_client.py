@@ -265,42 +265,42 @@ class TestCoinbaseClient(unittest.TestCase):
             exc_info=True,
         )
 
-    # --- Test get_product_candles ---
+    # --- Test get_public_candles ---
 
-    def test_get_product_candles_no_client(self):
-        """Test get_product_candles returns None if the RESTClient is not initialized."""
+    def test_get_public_candles_no_client(self):
+        """Test get_public_candles returns None if the RESTClient is not initialized."""
         self.client.client = None  # Manually set client to None
 
-        result = self.client.get_product_candles(
+        result = self.client.get_public_candles(
             "BTC-USD", "start", "end", "granularity"
         )
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An error occurred in get_product_candles for BTC-USD: RESTClient not initialized.",
+            "An error occurred in get_public_candles for BTC-USD: RESTClient not initialized.",
             exc_info=True,
         )
 
-    def test_get_product_candles_empty_product_id(self):
-        """Test get_product_candles returns None if product_id is empty."""
-        result = self.client.get_product_candles("", "start", "end", "granularity")
+    def test_get_public_candles_empty_product_id(self):
+        """Test get_public_candles returns None if product_id is empty."""
+        result = self.client.get_public_candles("", "start", "end", "granularity")
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An error occurred in get_product_candles for : Product ID must be a non-empty string.",
+            "An error occurred in get_public_candles for : Product ID must be a non-empty string.",
             exc_info=True,
         )
 
-    def test_get_product_candles_success(self):
+    def test_get_public_candles_success(self):
         """Test successful retrieval of product candles."""
         self.mock_logger_instance.reset_mock()
         mock_response = MockResponse({"candles": [{"open": "100"}]})
-        self.mock_rest_client_instance.get_product_candles.return_value = mock_response
-        result = self.client.get_product_candles(
+        self.mock_rest_client_instance.get_public_candles.return_value = mock_response
+        result = self.client.get_public_candles(
             product_id="BTC-USD", start="2023-01-01", end="2023-01-02", granularity="ONE_HOUR"
         )
         self.assertEqual(result, [{"open": "100"}])
-        self.mock_rest_client_instance.get_product_candles.assert_called_once_with(
+        self.mock_rest_client_instance.get_public_candles.assert_called_once_with(
             product_id="BTC-USD",
             start_date="2023-01-01",
             end_date="2023-01-02",
@@ -310,31 +310,31 @@ class TestCoinbaseClient(unittest.TestCase):
             "Successfully retrieved 1 candles for BTC-USD."
         )
 
-    def test_get_product_candles_error_handling(self):
-        """Test all error handling for get_product_candles."""
+    def test_get_public_candles_error_handling(self):
+        """Test all error handling for get_public_candles."""
         self.mock_logger_instance.reset_mock()
-        log_message = f"An error occurred in get_product_candles for BTC-USD: {self.mock_http_error}"
+        log_message = f"An error occurred in get_public_candles for BTC-USD: {self.mock_http_error}"
         self._test_api_call_http_error(
-            "get_product_candles", "get_product_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
+            "get_public_candles", "get_public_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
         )
 
         self.mock_logger_instance.reset_mock()
-        log_message = f"An error occurred in get_product_candles for BTC-USD: {self.mock_request_exception}"
+        log_message = f"An error occurred in get_public_candles for BTC-USD: {self.mock_request_exception}"
         self._test_api_call_request_exception(
-            "get_product_candles", "get_product_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
+            "get_public_candles", "get_public_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
         )
 
-    def test_get_product_candles_malformed_response_candles_not_list(self):
-        """Test get_product_candles handles a response where 'candles' is not a list."""
+    def test_get_public_candles_malformed_response_candles_not_list(self):
+        """Test get_public_candles handles a response where 'candles' is not a list."""
         self.mock_logger_instance.reset_mock()
         mock_response = MockResponse({"candles": "not-a-list"})
-        self.mock_rest_client_instance.get_product_candles.return_value = mock_response
-        result = self.client.get_product_candles(
+        self.mock_rest_client_instance.get_public_candles.return_value = mock_response
+        result = self.client.get_public_candles(
             product_id="BTC-USD", granularity="ONE_MINUTE"
         )
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An error occurred in get_product_candles for BTC-USD: 'candles' key must be a list.",
+            "An error occurred in get_public_candles for BTC-USD: 'candles' key must be a list.",
             exc_info=True,
         )
 

@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, call
 
 # Import the module to be tested
-from trading import main
+import main
 
 
 class TestMainModule(unittest.TestCase):
