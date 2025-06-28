@@ -85,9 +85,7 @@ class CoinbaseClient:
 
     def _log_api_error(self, method_name: str, error: Exception) -> None:
         """Logs a standardized error message for API call failures."""
-        self.logger.error(
-            f"An error occurred in {method_name}: {error}", exc_info=True
-        )
+        self.logger.error(f"An error occurred in {method_name}: {error}", exc_info=True)
 
     def get_accounts(self) -> Optional[List[Dict[str, Any]]]:
         """Retrieves a list of all trading accounts."""

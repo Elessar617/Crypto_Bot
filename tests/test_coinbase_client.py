@@ -2,7 +2,7 @@
 
 
 import unittest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import ANY, patch, MagicMock, call
 import uuid
 from requests.exceptions import HTTPError, RequestException
 from datetime import datetime, timezone, timedelta
@@ -477,24 +477,34 @@ class TestCoinbaseClient(unittest.TestCase):
 
     def test_limit_order_success(self):
         """Test successful placement of a limit order."""
-        self.mock_rest_client_instance.limit_order.return_value = {
-            "success": True,
-            "order_id": "order-123",
+        # Arrange
+        mock_response = {"success": True, "order_id": "order-123"}
+        self.mock_rest_client_instance.limit_order.return_value = mock_response
+
+        expected_order_config = {
+            "limit_limit_gtc": {
+                "base_size": "1",
+                "limit_price": "10000",
+                "post_only": False,
+            }
         }
+
+        # Act
         response = self.client.limit_order(
             side="BUY", product_id="BTC-USD", base_size="1", limit_price="10000"
         )
-        self.assertIsNotNone(response)
-        self.assertTrue(response["success"])
-        self.assertEqual(response["order_id"], "order-123")
+
+        # Assert
+        self.assertEqual(response, mock_response)
         self.mock_logger_instance.info.assert_called_with(
             "Successfully placed buy order for BTC-USD. Order ID: order-123"
         )
-        # Check that limit_order was called on the RESTClient with correct args
-        self.mock_rest_client_instance.limit_order.assert_called_once()
-        call_args, call_kwargs = self.mock_rest_client_instance.limit_order.call_args
-        self.assertEqual(call_kwargs.get("side"), "BUY")
-        self.assertEqual(call_kwargs.get("product_id"), "BTC-USD")
+        self.mock_rest_client_instance.limit_order.assert_called_once_with(
+            side="BUY",
+            product_id="BTC-USD",
+            client_order_id=ANY,
+            order_configuration=expected_order_config,
+        )
 
     def test_limit_order_failure(self):
         """Test failed placement of a limit order with failure_reason."""
@@ -943,18 +953,22 @@ class TestCoinbaseClient(unittest.TestCase):
         with patch("trading.coinbase_client.datetime", wraps=datetime) as mock_dt:
             mock_dt.now.return_value = mock_now
 
+            # Act: Call the method under test
             self.client.get_public_candles(product_id="BTC-USD", granularity="ONE_DAY")
 
-            delta = timedelta(days=1) * 300
-            expected_start = int((mock_now - delta).timestamp())
-            expected_end = int(mock_now.timestamp())
+            # Assert: Verify the mock was called correctly
+            self.mock_rest_client_instance.get_public_candles.assert_called_once()
+            _args, kwargs = self.mock_rest_client_instance.get_public_candles.call_args
 
-            self.mock_rest_client_instance.get_public_candles.assert_called_with(
-                product_id="BTC-USD",
-                start=str(expected_start),
-                end=str(expected_end),
-                granularity="ONE_DAY",
-            )
+            # Assert arguments passed to the mock
+            self.assertEqual(kwargs.get("product_id"), "BTC-USD")
+            self.assertEqual(kwargs.get("granularity"), "ONE_DAY")
+
+            # Assert that the calculated start/end timestamps are correct
+            expected_end_ts = int(mock_now.timestamp())
+            expected_start_ts = int((mock_now - timedelta(days=300)).timestamp())
+            self.assertEqual(int(kwargs.get("end")), expected_end_ts)
+            self.assertEqual(int(kwargs.get("start")), expected_start_ts)
 
     def test_get_public_candles_response_not_a_dict(self):
         """Test get_public_candles when the API response is not a dictionary."""
