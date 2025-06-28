@@ -66,8 +66,8 @@ This section outlines ongoing efforts to improve the project's structure, stabil
 ### 1. Mutation Testing (`trading/coinbase_client.py`)
 
 - **Objective:** Systematically kill all surviving mutants in the `trading/coinbase_client.py` module to ensure maximum test coverage and code robustness.
-- **Status:** **COMPLETED**
-- **Outcome:** 100% mutation coverage achieved. All 163 mutants were successfully killed by adding a comprehensive suite of targeted unit tests. The test suite now stands at 159 passing tests.
+- **Status:** **IN PROGRESS**
+- **Outcome:** Initial mutation testing run completed, revealing several suspicious mutants. While some were addressed, the exhaustive effort to kill every mutant is paused to prioritize other development tasks. The current test suite provides substantial coverage, and we will revisit this for 100% completion at a later stage.
 
 ### 2. Code Cleanup & Logging Enhancements
 
@@ -177,7 +177,7 @@ The goal is to achieve 100% mutation test coverage on all critical modules. We w
 
 | Status         | Module                  | Notes                                            |
 | :------------- | :---------------------- | :----------------------------------------------- |
-| `[ ] PENDING`  | `coinbase_client.py`    | **(NEXT STEP)** Re-verifying previous results.   |
+| `[X] IN PROGRESS` | `coinbase_client.py`    | Initial run complete. Pausing exhaustive hunt for suspicious mutants. |
 | `[ ] PENDING`  | `trade_manager.py`      |                                                  |
 | `[ ] PENDING`  | `persistence.py`        |                                                  |
 | `[ ] PENDING`  | `order_calculator.py`   |                                                  |

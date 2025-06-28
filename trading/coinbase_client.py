@@ -201,7 +201,7 @@ class CoinbaseClient:
                 f"Successfully retrieved {len(candles)} candles for {product_id}."
             )
             return candles
-        except (HTTPError, RequestException, Exception) as e:
+        except (HTTPError, RequestException, ValueError) as e:
             self._log_api_error(f"get_public_candles for {product_id}", e)
             return None
 
@@ -213,7 +213,6 @@ class CoinbaseClient:
         assert product_id, "Product ID must be a non-empty string."
         try:
             assert self.client is not None, "RESTClient not initialized."
-            assert product_id, "Product ID must be a non-empty string."
 
             response = self.client.get_product_book(product_id=product_id, limit=limit)
             response_dict = self._handle_api_response(response)
