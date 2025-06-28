@@ -10,6 +10,7 @@ import pandas as pd
 from decimal import Decimal
 
 from trading.coinbase_client import CoinbaseClient
+from trading.persistence import PersistenceManager
 
 
 class TradeManager:
@@ -134,7 +135,9 @@ class TradeManager:
         """Manages sell-side logic for a filled buy trade."""
         buy_order_id = filled_buy_trade.get("buy_order_id")
         if not buy_order_id:
-            self.logger.error(f"[{asset_id}] Corrupted trade state: buy_order_id missing.")
+            self.logger.error(
+                f"[{asset_id}] Corrupted trade state: buy_order_id missing."
+            )
             return
 
         sell_orders = filled_buy_trade.get("associated_sell_orders", [])
@@ -180,7 +183,7 @@ class TradeManager:
                     continue
 
                 new_status = updated_order.get("status")
-                if current_status != new_status:
+                if new_status and current_status != new_status:
                     self.logger.info(
                         f"[{asset_id}] Sell order {order_id} status updated to {new_status}."
                     )
@@ -278,9 +281,13 @@ class TradeManager:
                     )
 
             if placed_orders == 0:
-                self.logger.warning(f"[{asset_id}] No sell orders were successfully placed. The filled buy trade will be re-processed.")
+                self.logger.warning(
+                    f"[{asset_id}] No sell orders were successfully placed. The filled buy trade will be re-processed."
+                )
             else:
-                self.logger.info(f"[{asset_id}] Successfully placed and saved {placed_orders} sell orders.")
+                self.logger.info(
+                    f"[{asset_id}] Successfully placed and saved {placed_orders} sell orders."
+                )
 
         except Exception as e:
             self.logger.error(
@@ -302,7 +309,9 @@ class TradeManager:
             order_status = self.client.get_order(order_id)
 
             if not order_status:
-                self.logger.error(f"[{asset_id}] Could not get status for order {order_id}.")
+                self.logger.error(
+                    f"[{asset_id}] Could not get status for order {order_id}."
+                )
                 return
 
             status = order_status.get("status")
@@ -313,12 +322,14 @@ class TradeManager:
                 avg_price = Decimal(order_status.get("average_filled_price", "0"))
 
                 if filled_size > 0 and avg_price > 0:
-                    sell_orders_params = self.order_calculator.determine_sell_orders_params(
-                        buy_price=avg_price,
-                        buy_quantity=filled_size,
-                        sell_profit_tiers=config_asset_params["sell_profit_tiers"],
-                        product_details=product_details,
-                        logger=self.logger,
+                    sell_orders_params = (
+                        self.order_calculator.determine_sell_orders_params(
+                            buy_price=avg_price,
+                            buy_quantity=filled_size,
+                            sell_profit_tiers=config_asset_params["sell_profit_tiers"],
+                            product_details=product_details,
+                            logger=self.logger,
+                        )
                     )
 
                     self.persistence_manager.save_filled_buy_trade(

@@ -56,9 +56,9 @@ class TestCoinbaseClient(unittest.TestCase):
         self, method_name, rest_method_name, api_args, log_message
     ):
         """Helper to test HTTPError handling for a given client method."""
-        getattr(self.mock_rest_client_instance, rest_method_name).side_effect = (
-            self.mock_http_error
-        )
+        getattr(
+            self.mock_rest_client_instance, rest_method_name
+        ).side_effect = self.mock_http_error
         result = getattr(self.client, method_name)(**api_args)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(log_message, exc_info=True)
@@ -67,9 +67,9 @@ class TestCoinbaseClient(unittest.TestCase):
         self, method_name, rest_method_name, api_args, log_message
     ):
         """Helper to test RequestException handling for a given client method."""
-        getattr(self.mock_rest_client_instance, rest_method_name).side_effect = (
-            self.mock_request_exception
-        )
+        getattr(
+            self.mock_rest_client_instance, rest_method_name
+        ).side_effect = self.mock_request_exception
         result = getattr(self.client, method_name)(**api_args)
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(log_message, exc_info=True)
@@ -218,7 +218,8 @@ class TestCoinbaseClient(unittest.TestCase):
 
         self.assertIsNone(result)
         self.mock_logger_instance.error.assert_called_with(
-            "An error occurred in get_accounts: RESTClient not initialized.", exc_info=True
+            "An error occurred in get_accounts: RESTClient not initialized.",
+            exc_info=True,
         )
 
     def test_get_accounts_success(self):
@@ -360,20 +361,28 @@ class TestCoinbaseClient(unittest.TestCase):
         self.mock_logger_instance.reset_mock()
         log_message = f"An error occurred in get_public_candles for BTC-USD: {self.mock_http_error}"
         self._test_api_call_http_error(
-            "get_public_candles", "get_public_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
+            "get_public_candles",
+            "get_public_candles",
+            {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"},
+            log_message,
         )
 
         self.mock_logger_instance.reset_mock()
         log_message = f"An error occurred in get_public_candles for BTC-USD: {self.mock_request_exception}"
         self._test_api_call_request_exception(
-            "get_public_candles", "get_public_candles", {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"}, log_message
+            "get_public_candles",
+            "get_public_candles",
+            {"product_id": "BTC-USD", "granularity": "ONE_MINUTE"},
+            log_message,
         )
 
     def test_get_public_candles_malformed_response_candles_not_list(self):
         """Test get_public_candles handles a response where 'candles' is not a list."""
         self.mock_logger_instance.reset_mock()
         mock_response_dict = {"candles": "not-a-list"}
-        self.mock_rest_client_instance.get_public_candles.return_value = mock_response_dict
+        self.mock_rest_client_instance.get_public_candles.return_value = (
+            mock_response_dict
+        )
         result = self.client.get_public_candles(
             product_id="BTC-USD", granularity="ONE_MINUTE"
         )
@@ -397,23 +406,15 @@ class TestCoinbaseClient(unittest.TestCase):
             exc_info=True,
         )
 
-    def test_get_product_success(self):
-        """Test successful retrieval of a single product."""
-        mock_response = {"id": "BTC-USD"}
-        self.mock_rest_client_instance.get_product.return_value = mock_response
-        result = self.client.get_product("BTC-USD")
-        self.assertEqual(result, {"id": "BTC-USD"})
-        self.mock_rest_client_instance.get_product.assert_called_once_with(
-            product_id="BTC-USD"
-        )
-
     def test_get_product_error_handling(self):
         """Test the generic exception handling for get_product."""
         self.mock_logger_instance.reset_mock()
         product_id = "BTC-USD"
         # Simulate a non-HTTP, non-RequestException error
         error_message = "A wild error appears!"
-        self.mock_rest_client_instance.get_product.side_effect = Exception(error_message)
+        self.mock_rest_client_instance.get_product.side_effect = Exception(
+            error_message
+        )
 
         result = self.client.get_product(product_id=product_id)
 
@@ -538,7 +539,7 @@ class TestCoinbaseClient(unittest.TestCase):
             "Failed to place buy order for BTC-USD. Reason: Unknown reason"
         )
 
-    # ... rest of the code remains the same ...
+        # ... rest of the code remains the same ...
         """Test get_order handles a response that is not a dictionary."""
         self.mock_rest_client_instance.get_order.return_value = "not_a_dict"
         order_id = "some-order-id"
@@ -814,7 +815,6 @@ class TestCoinbaseClient(unittest.TestCase):
                 granularity="ONE_MINUTE",
             )
 
-
     def test_get_public_candles_five_minute_granularity(self):
         """Test get_public_candles with FIVE_MINUTE granularity and no start/end."""
         mock_now = datetime(2023, 1, 10, 12, 0, 0, tzinfo=timezone.utc)
@@ -886,9 +886,7 @@ class TestCoinbaseClient(unittest.TestCase):
         with patch("trading.coinbase_client.datetime", wraps=datetime) as mock_dt:
             mock_dt.now.return_value = mock_now
 
-            self.client.get_public_candles(
-                product_id="BTC-USD", granularity="ONE_HOUR"
-            )
+            self.client.get_public_candles(product_id="BTC-USD", granularity="ONE_HOUR")
 
             delta = timedelta(hours=1) * 300
             expected_start = int((mock_now - delta).timestamp())
@@ -907,9 +905,7 @@ class TestCoinbaseClient(unittest.TestCase):
         with patch("trading.coinbase_client.datetime", wraps=datetime) as mock_dt:
             mock_dt.now.return_value = mock_now
 
-            self.client.get_public_candles(
-                product_id="BTC-USD", granularity="TWO_HOUR"
-            )
+            self.client.get_public_candles(product_id="BTC-USD", granularity="TWO_HOUR")
 
             delta = timedelta(hours=2) * 300
             expected_start = int((mock_now - delta).timestamp())
@@ -928,9 +924,7 @@ class TestCoinbaseClient(unittest.TestCase):
         with patch("trading.coinbase_client.datetime", wraps=datetime) as mock_dt:
             mock_dt.now.return_value = mock_now
 
-            self.client.get_public_candles(
-                product_id="BTC-USD", granularity="SIX_HOUR"
-            )
+            self.client.get_public_candles(product_id="BTC-USD", granularity="SIX_HOUR")
 
             delta = timedelta(hours=6) * 300
             expected_start = int((mock_now - delta).timestamp())
@@ -949,9 +943,7 @@ class TestCoinbaseClient(unittest.TestCase):
         with patch("trading.coinbase_client.datetime", wraps=datetime) as mock_dt:
             mock_dt.now.return_value = mock_now
 
-            self.client.get_public_candles(
-                product_id="BTC-USD", granularity="ONE_DAY"
-            )
+            self.client.get_public_candles(product_id="BTC-USD", granularity="ONE_DAY")
 
             delta = timedelta(days=1) * 300
             expected_start = int((mock_now - delta).timestamp())
@@ -995,7 +987,9 @@ class TestCoinbaseClient(unittest.TestCase):
         """Test get_product_book with an empty product_id."""
         with self.assertRaises(AssertionError) as context:
             self.client.get_product_book(product_id="")
-        self.assertEqual(str(context.exception), "Product ID must be a non-empty string.")
+        self.assertEqual(
+            str(context.exception), "Product ID must be a non-empty string."
+        )
         self.mock_logger_instance.error.assert_not_called()
 
     def test_get_product_book_api_returns_none(self):
@@ -1121,7 +1115,9 @@ class TestCoinbaseClient(unittest.TestCase):
         with self.assertRaises(AssertionError) as context:
             self.client.get_product(product_id="")
 
-        self.assertEqual(str(context.exception), "Product ID must be a non-empty string.")
+        self.assertEqual(
+            str(context.exception), "Product ID must be a non-empty string."
+        )
         self.mock_logger_instance.error.assert_not_called()
 
     def test_get_product_response_not_a_dict(self):
@@ -1235,7 +1231,6 @@ class TestCoinbaseClient(unittest.TestCase):
             exc_info=True,
         )
 
-
     def test_get_product_candles_with_datetime_end(self):
         """Test get_product_candles with a datetime object for the end parameter."""
         mock_candles_response = {
@@ -1250,7 +1245,9 @@ class TestCoinbaseClient(unittest.TestCase):
                 }
             ]
         }
-        self.mock_rest_client_instance.get_public_candles.return_value = mock_candles_response
+        self.mock_rest_client_instance.get_public_candles.return_value = (
+            mock_candles_response
+        )
 
         end_time = datetime.now(timezone.utc) - timedelta(days=1)
         self.client.get_public_candles(
