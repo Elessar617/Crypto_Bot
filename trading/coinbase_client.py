@@ -4,7 +4,7 @@ import json
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Union
 
 
 from requests.exceptions import HTTPError, RequestException
@@ -79,8 +79,7 @@ class CoinbaseClient:
             try:
                 return json.loads(response)
             except json.JSONDecodeError:
-                self.logger.error("Failed to decode JSON from response: %s", response)
-                # Return original string to trigger caller's error handling
+                # Let the caller handle the error by returning the original string
                 return response
         return response
 
@@ -98,13 +97,19 @@ class CoinbaseClient:
             response = self.client.get_accounts()
             response_dict = self._handle_api_response(response)
 
-            assert isinstance(
-                response_dict, dict
-            ), "get_accounts response should be a dictionary."
+            if not isinstance(response_dict, dict):
+                self.logger.error(
+                    f"An error occurred in get_accounts: Response was not a dictionary. Response: {response_dict}"
+                )
+                return None
+
             accounts = response_dict.get("accounts")
 
-            assert accounts is not None, "'accounts' key is missing in the response."
-            assert isinstance(accounts, list), "'accounts' key should be a list."
+            if not isinstance(accounts, list):
+                self.logger.error(
+                    f"An error occurred in get_accounts: 'accounts' key must be a list. Response: {response_dict}"
+                )
+                return None
 
             self.logger.info(f"Successfully retrieved {len(accounts)} accounts.")
             return accounts
@@ -116,16 +121,28 @@ class CoinbaseClient:
         self,
         product_id: str,
         granularity: str,
-        start: Optional[str] = None,
-        end: Optional[str] = None,
+        start: Optional[Union[str, datetime]] = None,
+        end: Optional[Union[str, datetime]] = None,
     ) -> Optional[List[Dict[str, Any]]]:
         """Fetches historical candle data for a product."""
         try:
             assert self.client is not None, "RESTClient not initialized."
             assert product_id, "Product ID must be a non-empty string."
 
-            # If no start/end is provided, fetch the last 300 candles.
-            if not start or not end:
+            # 1. Determine end datetime object (end_dt)
+            if end is None:
+                end_dt = datetime.now(timezone.utc)
+            elif isinstance(end, datetime):
+                end_dt = end
+            else:
+                try:
+                    end_dt = datetime.fromtimestamp(int(end), tz=timezone.utc)
+                except (ValueError, TypeError):
+                    self.logger.error(f"Invalid format for end time: {end}")
+                    return None
+
+            # 2. Determine start datetime object (start_dt)
+            if start is None:
                 granularity_map = {
                     "ONE_MINUTE": timedelta(minutes=1),
                     "FIVE_MINUTE": timedelta(minutes=5),
@@ -138,32 +155,36 @@ class CoinbaseClient:
                 }
                 candle_duration = granularity_map.get(granularity)
                 if not candle_duration:
-                    self.logger.error(
-                        f"Unsupported granularity for candle calculation: {granularity}"
-                    )
+                    self.logger.error(f"Unsupported granularity: {granularity}")
+                    return None
+                start_dt = end_dt - (candle_duration * 300)
+            elif isinstance(start, datetime):
+                start_dt = start
+            else:
+                try:
+                    start_dt = datetime.fromtimestamp(int(start), tz=timezone.utc)
+                except (ValueError, TypeError):
+                    self.logger.error(f"Invalid format for start time: {start}")
                     return None
 
-                end_dt = datetime.now(timezone.utc)
-                start_dt = end_dt - (candle_duration * 300)
-                # The API expects UNIX timestamps as strings.
-                start_ts = str(int(start_dt.timestamp()))
-                end_ts = str(int(end_dt.timestamp()))
-            else:
-                start_ts = start
-                end_ts = end
+            # 3. Convert to string timestamps for the API call
+            start_ts = str(int(start_dt.timestamp()))
+            end_ts = str(int(end_dt.timestamp()))
 
-            response = self.client.get_public_candles(
+            # 4. Make the API call
+            response = self.client.get_product_candles(
                 product_id=product_id,
                 start=start_ts,
                 end=end_ts,
                 granularity=granularity,
             )
-            self.logger.info(f"Raw response from get_public_candles: {response}")
+            self.logger.info(f"Raw response from get_product_candles: {response}")
             response_dict = self._handle_api_response(response)
 
             if not isinstance(response_dict, dict):
                 self.logger.error(
-                    f"An error occurred in get_public_candles for {product_id}: Response was not a dictionary."
+                    f"An error occurred in get_public_candles for {product_id}: Response was not a dictionary.",
+                    exc_info=True,
                 )
                 return None
 
@@ -189,6 +210,7 @@ class CoinbaseClient:
     ) -> Optional[Dict[str, Any]]:
         """Retrieves the order book for a specific product."""
         self.logger.debug(f"Attempting to retrieve order book for {product_id}.")
+        assert product_id, "Product ID must be a non-empty string."
         try:
             assert self.client is not None, "RESTClient not initialized."
             assert product_id, "Product ID must be a non-empty string."
@@ -213,14 +235,13 @@ class CoinbaseClient:
     def get_product(self, product_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves details for a single product with retry logic."""
         self.logger.debug(f"Attempting to retrieve product details for {product_id}.")
+        assert product_id, "Product ID must be a non-empty string."
         max_retries = 3
-        retry_delay = 5  # seconds
+        base_delay = 1  # seconds
 
         for attempt in range(max_retries):
             try:
                 assert self.client is not None, "RESTClient not initialized."
-                assert product_id, "Product ID must be a non-empty string."
-
                 response = self.client.get_product(product_id=product_id)
                 response_dict = self._handle_api_response(response)
 
@@ -228,25 +249,25 @@ class CoinbaseClient:
                     response_dict, dict
                 ), "get_product response should be a dictionary."
 
-                self.logger.info(f"Successfully retrieved product details for {product_id}.")
+                self.logger.info(f"Successfully retrieved product {product_id}.")
                 return response_dict
 
             except (HTTPError, RequestException) as e:
+                self.logger.warning(
+                    f"Attempt {attempt + 1} of {max_retries} failed for get_product({product_id}). Error: {e}"
+                )
                 if attempt < max_retries - 1:
-                    self.logger.warning(
-                        f"HTTP error on attempt {attempt + 1}/{max_retries} for {product_id}: {e}. Retrying in {retry_delay}s..."
-                    )
-                    time.sleep(retry_delay)
+                    delay = base_delay * (2**attempt)
+                    self.logger.info(f"Retrying in {delay} seconds...")
+                    time.sleep(delay)
                 else:
-                    self.logger.error(
-                        f"Failed to fetch product details for {product_id} after {max_retries} attempts.",
-                        exc_info=True,
-                    )
+                    self._log_api_error(f"get_product for {product_id}", e)
                     return None
             except Exception as e:
                 self._log_api_error(f"get_product for {product_id}", e)
                 return None
-        return None
+
+        return None  # Should not be reached if logic is correct
 
     def limit_order(
         self,

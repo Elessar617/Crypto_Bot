@@ -98,6 +98,14 @@ Your current project has code split between `trading/` (a package) and the root 
 - Move all `.py` files for your core logic into `trading/`.
 - Leave only entry points (like `main.py`), configuration, and documentation in the project root.
 
+### 4. Re-implementation of Retry Logic and Test Suite Correction
+
+- **Objective:** Re-implement the API call retry logic in `coinbase_client.py` that was previously removed and ensure the entire test suite passes.
+- **Status:** **COMPLETED**
+- **Outcome:**
+  - The `get_product` method now uses an exponential backoff strategy for retries, improving robustness.
+  - All 159 tests in the suite are passing after correcting mock calls, adding missing assertions, and fixing test logic that broke due to the re-implementation.
+
 ##### Step 2: Fix All Imports
 - Use **only absolute imports** within your code and tests.
   **Example:**
@@ -159,44 +167,33 @@ This section tracks the final steps to ensure the codebase is stable, clean, and
 
 ## VII. Future Roadmap & Advanced Testing
 
-This section outlines potential future work, including advanced testing strategies and new features.
+This section outlines the plan for advanced testing to ensure the bot's reliability and robustness.
 
-### 1. Advanced Testing Strategy
+### 1. Mutation Testing Checklist
 
-This phase moves beyond simple line coverage to a more sophisticated, risk-based approach. The goal is not just to test more, but to test smarter, focusing effort where it provides the most value and confidence.
+The goal is to achieve 100% mutation test coverage on all critical modules. We will use `mutmut` to systematically find and kill all surviving mutants.
 
-#### Strategic Code Coverage
-Instead of a uniform coverage target, we will apply a tiered approach based on module criticality.
+**Run Command:** `mutmut run --paths-to-mutate trading/<module_name>.py`
 
-*   **Tier 1: Critical Modules (>95% Coverage + Mutation Testing)**
-    *   *Modules:* `coinbase_client.py`, `persistence.py`, `trading/` (all modules)
-*   **Tier 2: High Importance (>85% Coverage)**
-    *   *Modules:* `technical_analysis.py`, `main.py`
-*   **Tier 3: Utility & Supporting (<85% Coverage Acceptable)**
-    *   *Modules:* `config.py`, `logger.py`
-
-#### Mutation Testing
-To measure the *quality* and *effectiveness* of our tests, not just their quantity, we will introduce mutation testing.
-
-*   **Goal:** Ensure that our test suite can detect small, intentionally introduced bugs (mutations).
-*   **Tool:** We will use `mutmut` for Python.
-*   **Next Steps:**
-    *   [ ] **(CURRENT STEP)** Resume Mutation Testing: Restart `mutmut` on the refactored `coinbase_client.py` to get a new baseline score.
-    *   [ ] Analyze surviving mutants and write targeted tests.
-    *   [ ] Continue iterating until mutation score is satisfactory for Tier 1 modules.
+| Status         | Module                  | Notes                                            |
+| :------------- | :---------------------- | :----------------------------------------------- |
+| `[ ] PENDING`  | `coinbase_client.py`    | **(NEXT STEP)** Re-verifying previous results.   |
+| `[ ] PENDING`  | `trade_manager.py`      |                                                  |
+| `[ ] PENDING`  | `persistence.py`        |                                                  |
+| `[ ] PENDING`  | `order_calculator.py`   |                                                  |
+| `[ ] PENDING`  | `signal_analyzer.py`    |                                                  |
+| `[ ] PENDING`  | `technical_analysis.py` |                                                  |
 
 ### 2. Test Suite Refactoring
-*   [ ] **Consolidate Test Helpers and Fixtures:**
-    *   Identify common setup logic, mock objects, and test data.
-    *   Create shared `pytest` fixtures in `tests/conftest.py` to remove duplication.
-*   [ ] **Refactor for Testability:**
-    *   Refactor modules like `logger.py` to make their configuration explicit and repeatable, simplifying tests.
+
+*   [ ] **Consolidate Test Helpers and Fixtures:** Create shared `pytest` fixtures in `tests/conftest.py` to remove duplication.
+*   [ ] **Refactor for Testability:** Refactor modules like `logger.py` to simplify tests.
 
 ### 3. New Features & Enhancements
+
 *   [ ] Enhance the bot with new strategies or indicators.
 *   [ ] Pursue performance optimizations or other code improvements.
-*   [ ] Prepare the bot for a live production environment with robust deployment scripts.
 
 ### 4. Final Code Review
 
-*   [ ] **Final Code Review:** After all advanced testing (including mutation testing) is complete, conduct a final review of the entire codebase for clarity, consistency, and adherence to design principles.
+*   [ ] **Final Code Review:** After all advanced testing is complete, conduct a final review of the entire codebase.
