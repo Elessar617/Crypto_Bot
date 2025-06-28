@@ -172,7 +172,7 @@ class CoinbaseClient:
             end_ts = str(int(end_dt.timestamp()))
 
             # 4. Make the API call
-            response = self.client.get_product_candles(
+            response = self.client.get_public_candles(
                 product_id=product_id,
                 start=start_ts,
                 end=end_ts,
