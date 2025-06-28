@@ -1236,5 +1236,67 @@ class TestCoinbaseClient(unittest.TestCase):
         )
 
 
+    def test_get_product_candles_with_datetime_end(self):
+        """Test get_product_candles with a datetime object for the end parameter."""
+        mock_candles_response = {
+            "candles": [
+                {
+                    "start": "1672531200",
+                    "high": "170",
+                    "low": "160",
+                    "open": "165",
+                    "close": "168",
+                    "volume": "1000",
+                }
+            ]
+        }
+        self.mock_rest_client_instance.get_public_candles.return_value = mock_candles_response
+
+        end_time = datetime.now(timezone.utc) - timedelta(days=1)
+        self.client.get_public_candles(
+            product_id="BTC-USD",
+            start=int((end_time - timedelta(days=1)).timestamp()),
+            end=end_time,
+            granularity="ONE_DAY",
+        )
+
+        _args, kwargs = self.mock_rest_client_instance.get_public_candles.call_args
+        self.assertEqual(kwargs["end"], str(int(end_time.timestamp())))
+
+    @patch("trading.coinbase_client.time.sleep")
+    def test_get_product_retry_logic_backoff(self, mock_sleep):
+        """Test the retry logic for get_product includes exponential backoff."""
+        self.mock_rest_client_instance.get_product.side_effect = [
+            self.mock_http_error,
+            self.mock_http_error,
+            {"product_id": "BTC-USD", "price": "50000"},
+        ]
+
+        self.client.get_product("BTC-USD", max_retries=3, base_delay=1)
+
+        self.assertEqual(self.mock_rest_client_instance.get_product.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
+        mock_sleep.assert_has_calls([call(1), call(2)])
+
+    def test_cancel_orders_failure_logs_reason(self):
+        """Test that cancel_orders logs the specific failure reason."""
+        mock_response = {
+            "results": [
+                {
+                    "success": False,
+                    "failure_reason": "ORDER_NOT_FOUND",
+                    "order_id": "order-id-1",
+                }
+            ]
+        }
+        self.mock_rest_client_instance.cancel_orders.return_value = mock_response
+
+        self.client.cancel_orders(["order-id-1"])
+
+        self.mock_logger_instance.error.assert_called_once_with(
+            "Failed to cancel order order-id-1. Reason: ORDER_NOT_FOUND"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

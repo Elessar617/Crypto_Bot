@@ -231,12 +231,14 @@ class CoinbaseClient:
             self._log_api_error(f"get_product_book for {product_id}", e)
             return None
 
-    def get_product(self, product_id: str) -> Optional[Dict[str, Any]]:
+    def get_product(
+        self, product_id: str, max_retries: int = 3, base_delay: float = 1.0
+    ) -> Optional[Dict[str, Any]]:
         """Retrieves details for a single product with retry logic."""
         self.logger.debug(f"Attempting to retrieve product details for {product_id}.")
         assert product_id, "Product ID must be a non-empty string."
-        max_retries = 3
-        base_delay = 1  # seconds
+        assert max_retries > 0, "max_retries must be positive."
+        assert base_delay > 0, "base_delay must be positive."
 
         for attempt in range(max_retries):
             try:
