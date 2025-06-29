@@ -12,7 +12,9 @@ from trading.logger import get_logger
 class PersistenceManager:
     """Manages reading and writing the bot's trade state to the filesystem."""
 
-    def __init__(self, persistence_dir: Optional[str] = None, logger: Optional[Any] = None) -> None:
+    def __init__(
+        self, persistence_dir: Optional[str] = None, logger: Optional[Any] = None
+    ) -> None:
         """
         Initializes the PersistenceManager.
 
@@ -40,7 +42,9 @@ class PersistenceManager:
             IOError: If there is an error writing to the file.
             TypeError: If arguments have incorrect types or content is not serializable.
         """
-        assert isinstance(asset_id, str) and asset_id, "asset_id must be a non-empty string."
+        assert (
+            isinstance(asset_id, str) and asset_id
+        ), "asset_id must be a non-empty string."
         assert isinstance(state_data, dict), "state_data must be a dictionary."
 
         file_path = self._get_file_path(asset_id)
@@ -52,12 +56,17 @@ class PersistenceManager:
             os.makedirs(self.persistence_dir, exist_ok=True)
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(state_data, f, indent=4)
-            self.logger.debug(f"Successfully saved trade state for {asset_id} to {file_path}")
+            self.logger.debug(
+                f"Successfully saved trade state for {asset_id} to {file_path}"
+            )
         except (IOError, OSError) as e:
             self.logger.error(f"Error writing to {file_path}: {e}", exc_info=True)
             raise IOError(f"Failed to write to {file_path}.") from e
         except TypeError as e:
-            self.logger.error(f"TypeError during JSON serialization for {asset_id}: {e}", exc_info=True)
+            self.logger.error(
+                f"TypeError during JSON serialization for {asset_id}: {e}",
+                exc_info=True,
+            )
             raise TypeError("state_data contains non-serializable content.") from e
 
     def load_trade_state(self, asset_id: str) -> Dict[str, Any]:
@@ -70,7 +79,9 @@ class PersistenceManager:
         Returns:
             A dictionary with the trade state, or an empty dictionary if not found/invalid.
         """
-        assert isinstance(asset_id, str) and asset_id, "asset_id must be a non-empty string."
+        assert (
+            isinstance(asset_id, str) and asset_id
+        ), "asset_id must be a non-empty string."
         file_path = self._get_file_path(asset_id)
 
         if not os.path.exists(file_path):
@@ -80,12 +91,16 @@ class PersistenceManager:
             with open(file_path, "r", encoding="utf-8") as f:
                 state_data = json.load(f)
                 if not isinstance(state_data, dict):
-                    self.logger.error(f"Corrupted state file for {asset_id}: content is not a dict.")
+                    self.logger.error(
+                        f"Corrupted state file for {asset_id}: content is not a dict."
+                    )
                     return {}
                 self.logger.debug(f"Successfully loaded trade state for {asset_id}")
                 return state_data
         except json.JSONDecodeError as e:
-            self.logger.error(f"Error decoding JSON from {file_path}: {e}", exc_info=True)
+            self.logger.error(
+                f"Error decoding JSON from {file_path}: {e}", exc_info=True
+            )
             return {}
         except IOError as e:
             self.logger.error(f"Error reading file {file_path}: {e}", exc_info=True)
@@ -161,7 +176,7 @@ class PersistenceManager:
         filled_trade = trade_state.get("filled_buy_trade")
 
         if not filled_trade or filled_trade.get("buy_order_id") != buy_order_id:
-            found_id = filled_trade.get('buy_order_id') if filled_trade else 'None'
+            found_id = filled_trade.get("buy_order_id") if filled_trade else "None"
             self.logger.error(
                 f"Attempted to add sell order to non-matching or non-existent buy trade "
                 f"for {asset_id} (expected {buy_order_id}, found {found_id})."
@@ -176,12 +191,16 @@ class PersistenceManager:
             so.get("order_id") == sell_order_id
             for so in filled_trade["associated_sell_orders"]
         ):
-            self.logger.warning(f"Sell order {sell_order_id} already exists for {asset_id}.")
+            self.logger.warning(
+                f"Sell order {sell_order_id} already exists for {asset_id}."
+            )
             return
 
         filled_trade["associated_sell_orders"].append(sell_order_details)
         self.save_trade_state(asset_id, trade_state)
-        self.logger.info(f"Added sell order {sell_order_id} to filled trade for {asset_id}")
+        self.logger.info(
+            f"Added sell order {sell_order_id} to filled trade for {asset_id}"
+        )
 
     def update_sell_order_status_in_filled_trade(
         self, asset_id: str, buy_order_id: str, sell_order_id: str, new_status: str

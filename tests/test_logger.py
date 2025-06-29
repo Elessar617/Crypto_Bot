@@ -15,7 +15,9 @@ import tempfile
 # Determine the actual logger module name (e.g., 'logger' if logger.py is in the same dir or PYTHONPATH)
 # Assuming logger.py is in the parent directory of tests, or accessible via PYTHONPATH
 # For this project structure, it's likely 'logger'
-LOGGER_MODULE_NAME = "trading.logger"  # The actual name of the logger module as Python knows it
+LOGGER_MODULE_NAME = (
+    "trading.logger"  # The actual name of the logger module as Python knows it
+)
 CONFIG_MODULE_NAME = "trading.config"  # The actual name of the config module
 
 # Try to import the actual logger and config modules to get their spec for MagicMock

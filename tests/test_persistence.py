@@ -346,7 +346,11 @@ class TestPersistenceManager(unittest.TestCase):
             "price": "1.5",
             "status": "NEW",
         }
-        initial_filled_trade = {"buy_order_id": buy_order_id, "price": "1.2", "quantity": "100"}
+        initial_filled_trade = {
+            "buy_order_id": buy_order_id,
+            "price": "1.2",
+            "quantity": "100",
+        }
         mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
 
         self.persistence_manager.add_sell_order_to_filled_trade(
@@ -454,7 +458,11 @@ class TestPersistenceManager(unittest.TestCase):
         """Test update returns False if associated_sell_orders list is missing."""
         asset_id = "SNX-USD"
         buy_order_id = "buy-snx-222"
-        initial_filled_trade = {"buy_order_id": buy_order_id, "price": "3", "quantity": "50"}
+        initial_filled_trade = {
+            "buy_order_id": buy_order_id,
+            "price": "3",
+            "quantity": "50",
+        }
         mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
 
         result = self.persistence_manager.update_sell_order_status_in_filled_trade(

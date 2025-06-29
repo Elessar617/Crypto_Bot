@@ -48,10 +48,12 @@ class TestMainModule(unittest.TestCase):
         )
 
         self.assertEqual(mock_tm_instance.process_asset_trade_cycle.call_count, 2)
-        mock_tm_instance.process_asset_trade_cycle.assert_has_calls([
-            call(asset_id="BTC-USD"),
-            call(asset_id="ETH-USD"),
-        ])
+        mock_tm_instance.process_asset_trade_cycle.assert_has_calls(
+            [
+                call(asset_id="BTC-USD"),
+                call(asset_id="ETH-USD"),
+            ]
+        )
         mock_exit.assert_not_called()
 
     @patch("main.coinbase_client.CoinbaseClient")
