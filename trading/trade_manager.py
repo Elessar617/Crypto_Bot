@@ -27,6 +27,14 @@ class TradeManager:
         order_calculator: Any,
     ):
         """Initializes the TradeManager."""
+        assert client is not None, "CoinbaseClient dependency cannot be None"
+        assert persistence_manager is not None, "PersistenceManager dependency cannot be None"
+        assert ta_module is not None, "TA module dependency cannot be None"
+        assert config_module is not None, "Config module dependency cannot be None"
+        assert logger is not None, "Logger dependency cannot be None"
+        assert signal_analyzer is not None, "SignalAnalyzer dependency cannot be None"
+        assert order_calculator is not None, "OrderCalculator dependency cannot be None"
+
         self.client = client
         self.persistence_manager = persistence_manager
         self.ta_module = ta_module
