@@ -506,6 +506,30 @@ class TestCoinbaseClient(unittest.TestCase):
             order_configuration=expected_order_config,
         )
 
+    def test_get_product_zero_base_delay(self):
+        """Test get_product with zero base_delay, expecting an AssertionError."""
+        with self.assertRaises(AssertionError) as cm:
+            self.client.get_product(product_id="BTC-USD", base_delay=0)
+        self.assertEqual(str(cm.exception), "base_delay must be positive.")
+
+    def test_get_product_one_retry(self):
+        """Test get_product with max_retries=1 to ensure it's a valid case."""
+        mock_response = {"product_id": "BTC-USD", "price": "50000"}
+        self.mock_rest_client_instance.get_product.return_value = mock_response
+
+        response = self.client.get_product(product_id="BTC-USD", max_retries=1)
+
+        self.assertEqual(response, mock_response)
+        self.mock_rest_client_instance.get_product.assert_called_once_with(
+            product_id="BTC-USD"
+        )
+
+    def test_get_product_zero_retries(self):
+        """Test get_product with zero max_retries, expecting an AssertionError."""
+        with self.assertRaises(AssertionError) as cm:
+            self.client.get_product(product_id="BTC-USD", max_retries=0)
+        self.assertEqual(str(cm.exception), "max_retries must be positive.")
+
     def test_limit_order_failure(self):
         """Test failed placement of a limit order with failure_reason."""
         self.mock_rest_client_instance.limit_order.return_value = {
