@@ -60,12 +60,94 @@ class TestTradeManager(unittest.TestCase):
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
         self.mock_logger.error.assert_called_with("[BTC-USD] Configuration not found.")
 
+    def test_get_asset_config_handles_missing_trading_pairs_attribute(self):
+        """Test _get_asset_config returns None if TRADING_PAIRS attribute is missing."""
+        # Arrange
+        asset_id = "BTC-USD"
+        # Ensure the TRADING_PAIRS attribute does not exist on the mock
+        if hasattr(self.mock_config, "TRADING_PAIRS"):
+            delattr(self.mock_config, "TRADING_PAIRS")
+
+        # Act
+        result = self.trade_manager._get_asset_config(asset_id)
+
+        # Assert
+        self.assertIsNone(result)
+        self.mock_logger.error.assert_called_with(f"[{asset_id}] Configuration not found.")
+
     def test_process_cycle_handles_no_product_details(self):
         """Test trade cycle exits gracefully if product details fail to load."""
         self.mock_client.get_product.return_value = None
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
         self.mock_logger.error.assert_called_with(
             "[BTC-USD] Failed to fetch valid product details."
+        )
+
+    def test_get_product_details_caching(self):
+        """Test that product details are fetched and cached correctly."""
+        # Arrange
+        asset_id = "BTC-USD"
+        product_details = {
+            "product_id": asset_id,
+            "quote_increment": "0.01",
+            "base_increment": "0.0001",
+            "base_min_size": "0.001",
+        }
+        self.mock_client.get_product.return_value = product_details
+
+        # Act: First call - should fetch from API
+        result1 = self.trade_manager._get_product_details(asset_id)
+
+        # Assert: First call
+        self.mock_client.get_product.assert_called_once_with(asset_id)
+        self.assertEqual(result1, product_details)
+        self.assertIn(asset_id, self.trade_manager.product_details_cache)
+        self.assertEqual(self.trade_manager.product_details_cache[asset_id], product_details)
+
+        # Act: Second call - should use cache
+        result2 = self.trade_manager._get_product_details(asset_id)
+
+        # Assert: Second call
+        # The mock should still have been called only once from the first call
+        self.mock_client.get_product.assert_called_once_with(asset_id)
+        self.assertEqual(result2, product_details)
+
+    def test_get_product_details_api_failure(self):
+        """Test that None is returned and not cached on API failure."""
+        # Arrange
+        asset_id = "ETH-USD"
+        self.mock_client.get_product.return_value = None
+        # Ensure cache is empty for this asset
+        self.trade_manager.product_details_cache.pop(asset_id, None)
+
+        # Act
+        result = self.trade_manager._get_product_details(asset_id)
+
+        # Assert
+        self.assertIsNone(result)
+        self.assertNotIn(asset_id, self.trade_manager.product_details_cache)
+        self.mock_logger.error.assert_called_with(
+            f"[{asset_id}] Failed to fetch valid product details."
+        )
+
+    def test_get_product_details_exception_logging(self):
+        """Test that exceptions during product detail fetching are logged with traceback."""
+        # Arrange
+        asset_id = "XRP-USD"
+        error_message = "API is down"
+        self.mock_client.get_product.side_effect = Exception(error_message)
+        # Ensure cache is empty for this asset
+        self.trade_manager.product_details_cache.pop(asset_id, None)
+
+        # Act
+        result = self.trade_manager._get_product_details(asset_id)
+
+        # Assert
+        self.assertIsNone(result)
+        self.assertNotIn(asset_id, self.trade_manager.product_details_cache)
+        self.mock_logger.error.assert_called_once_with(
+            f"[{asset_id}] Exception fetching product details: {error_message}",
+            exc_info=True,
         )
 
     def test_handle_new_buy_order_places_order_on_signal(self):
@@ -260,3 +342,88 @@ class TestTradeManager(unittest.TestCase):
         self.mock_persistence.clear_filled_buy_trade.assert_called_once_with(
             asset_id="BTC-USD"
         )
+
+    def test_process_asset_trade_cycle_unhandled_exception_logging(self):
+        """Test that unhandled exceptions in the trade cycle are logged with traceback."""
+        # Arrange
+        asset_id = "BTC-USD"
+        error_message = "Something went wrong"
+        self.mock_persistence.load_trade_state.side_effect = Exception(error_message)
+
+        # Act
+        self.trade_manager.process_asset_trade_cycle(asset_id)
+
+        # Assert
+        self.mock_logger.error.assert_called_once_with(
+            f"[{asset_id}] Unhandled error in process_asset_trade_cycle: {error_message}",
+            exc_info=True,
+        )
+        # Also verify that the 'finally' block runs
+        self.mock_logger.info.assert_any_call(f"[{asset_id}] Trade cycle processing finished.")
+
+    def test_check_and_update_sell_orders_continues_after_invalid_order(self):
+        """Test that the loop checking sell orders continues after an invalid one."""
+        # Arrange: A filled buy trade with one invalid and one valid sell order
+        asset_id = "BTC-USD"
+        buy_order_id = "buy-123"
+        invalid_sell_order = {"status": "OPEN"}  # Missing 'order_id'
+        valid_sell_order = {"order_id": "sell-789", "status": "OPEN"}
+
+        filled_buy = {
+            "buy_order_id": buy_order_id,
+            "associated_sell_orders": [invalid_sell_order, valid_sell_order],
+        }
+        self.mock_persistence.load_trade_state.return_value = {
+            "filled_buy_trade": filled_buy
+        }
+        # Simulate the valid sell order is now filled
+        self.mock_client.get_order.return_value = {"status": "FILLED"}
+
+        # Act
+        self.trade_manager.process_asset_trade_cycle(asset_id)
+
+        # Assert
+        # Check that the invalid order was logged
+        self.mock_logger.warning.assert_called_with(f"[{asset_id}] Skipping sell order with no ID.")
+        # Crucially, check that the valid order was still processed
+        self.mock_client.get_order.assert_called_once_with("sell-789")
+        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+            asset_id=asset_id,
+            buy_order_id=buy_order_id,
+            sell_order_id="sell-789",
+            new_status="FILLED",
+        )
+
+    def test_check_and_update_sell_orders_skips_already_filled_orders(self):
+        """Test that sell orders already marked as FILLED are skipped."""
+        # Arrange: A filled buy trade with one open and one already-filled sell order
+        asset_id = "BTC-USD"
+        buy_order_id = "buy-123"
+        already_filled_order = {"order_id": "sell-456", "status": "FILLED"}
+        open_order = {"order_id": "sell-789", "status": "OPEN"}
+
+        filled_buy = {
+            "buy_order_id": buy_order_id,
+            "associated_sell_orders": [already_filled_order, open_order],
+        }
+        self.mock_persistence.load_trade_state.return_value = {
+            "filled_buy_trade": filled_buy
+        }
+        # The client should only be called for the open order
+        self.mock_client.get_order.return_value = {"status": "FILLED"}
+
+        # Act
+        self.trade_manager.process_asset_trade_cycle(asset_id)
+
+        # Assert
+        # Crucially, assert that get_order was only called for the open order
+        self.mock_client.get_order.assert_called_once_with("sell-789")
+        # And that the persistence layer was updated for it
+        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+            asset_id=asset_id,
+            buy_order_id=buy_order_id,
+            sell_order_id="sell-789",
+            new_status="FILLED",
+        )
+        # Since both are now filled, the trade should be cleared
+        self.mock_persistence.clear_filled_buy_trade.assert_called_once_with(asset_id=asset_id)
