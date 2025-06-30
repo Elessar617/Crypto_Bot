@@ -4,9 +4,8 @@ Unit tests for the persistence.py module.
 
 import unittest
 import os
-import json
 import shutil
-from unittest.mock import patch, mock_open, MagicMock
+from unittest.mock import mock_open, patch
 from trading.persistence import PersistenceManager
 
 # Define a consistent DATA_DIR for tests. Since all file operations are mocked,

@@ -77,7 +77,7 @@ class PersistenceManager:
             asset_id: The identifier for the asset (e.g., 'BTC-USD').
 
         Returns:
-            A dictionary with the trade state, or an empty dictionary if not found/invalid.
+            A dictionary with the trade state, or an empty dict if not found/invalid.
         """
         assert (
             isinstance(asset_id, str) and asset_id
@@ -171,15 +171,16 @@ class PersistenceManager:
     def add_sell_order_to_filled_trade(
         self, asset_id: str, buy_order_id: str, sell_order_details: Dict[str, Any]
     ) -> None:
-        """Adds a sell order to the list of associated sell orders for a filled buy trade."""
+        """Adds a sell order to a filled buy trade's sell order list."""
         trade_state = self.load_trade_state(asset_id)
         filled_trade = trade_state.get("filled_buy_trade")
 
         if not filled_trade or filled_trade.get("buy_order_id") != buy_order_id:
             found_id = filled_trade.get("buy_order_id") if filled_trade else "None"
             self.logger.error(
-                f"Attempted to add sell order to non-matching or non-existent buy trade "
-                f"for {asset_id} (expected {buy_order_id}, found {found_id})."
+                "Attempted to add sell order to non-matching or "
+                f"non-existent buy trade for {asset_id} "
+                f"(expected {buy_order_id}, found {found_id})."
             )
             raise ValueError(f"No matching filled buy trade found for {asset_id}.")
 
@@ -226,7 +227,8 @@ class PersistenceManager:
         if updated:
             self.save_trade_state(asset_id, trade_state)
             self.logger.info(
-                f"Updated status of sell order {sell_order_id} to '{new_status}' for {asset_id}"
+                f"Updated status of sell order {sell_order_id} "
+                f"to '{new_status}' for {asset_id}"
             )
         else:
             self.logger.warning(

@@ -67,9 +67,9 @@ class TestTradeManager(unittest.TestCase):
         self.mock_ta_module.reset_mock(return_value=True, side_effect=True)
         self.mock_config_module.reset_mock(return_value=True, side_effect=True)
         self.mock_signal_analyzer_module.reset_mock(return_value=True, side_effect=True)
-        self.mock_order_calculator_module.reset_mock(return_value=True, side_effect=True)
-
-
+        self.mock_order_calculator_module.reset_mock(
+            return_value=True, side_effect=True
+        )
 
     def _configure_mocks(self):
         """Configure default mock behaviors."""
@@ -139,7 +139,9 @@ class TestTradeManager(unittest.TestCase):
         config_asset_params = self.mock_config_module.TRADING_PAIRS[asset_id]
 
         # Patch the method that would be called
-        with patch.object(self.trade_manager, '_handle_filled_buy_order') as mock_handle_filled:
+        with patch.object(
+            self.trade_manager, "_handle_filled_buy_order"
+        ) as mock_handle_filled:
             # Act
             self.trade_manager.process_asset_trade_cycle(asset_id)
 
@@ -151,7 +153,9 @@ class TestTradeManager(unittest.TestCase):
 
     def test_initialization_with_none_ta_module(self):
         """Test that TradeManager raises an error if the ta_module is None."""
-        with self.assertRaisesRegex(AssertionError, "^TA module dependency cannot be None$"):
+        with self.assertRaisesRegex(
+            AssertionError, "^TA module dependency cannot be None$"
+        ):
             TradeManager(
                 client=self.mock_client,
                 persistence_manager=self.mock_persistence,
@@ -195,7 +199,9 @@ class TestTradeManager(unittest.TestCase):
 
     def test_initialization_with_none_signal_analyzer(self):
         """Test that TradeManager raises an error if the signal_analyzer is None."""
-        with self.assertRaisesRegex(AssertionError, "^SignalAnalyzer dependency cannot be None$"):
+        with self.assertRaisesRegex(
+            AssertionError, "^SignalAnalyzer dependency cannot be None$"
+        ):
             TradeManager(
                 client=self.mock_client,
                 persistence_manager=self.mock_persistence,
@@ -235,27 +241,36 @@ class TestTradeManager(unittest.TestCase):
         if hasattr(self.mock_config_module, "TRADING_PAIRS"):
             original_trading_pairs = self.mock_config_module.TRADING_PAIRS
             delattr(self.mock_config_module, "TRADING_PAIRS")
-            self.addCleanup(setattr, self.mock_config_module, "TRADING_PAIRS", original_trading_pairs)
+            self.addCleanup(
+                setattr,
+                self.mock_config_module,
+                "TRADING_PAIRS",
+                original_trading_pairs,
+            )
 
         # Act
         result = self.trade_manager._get_asset_config(asset_id)
 
         # Assert
         self.assertIsNone(result)
-        self.mock_logger.error.assert_called_with(f"[{asset_id}] Configuration not found.")
+        self.mock_logger.error.assert_called_with(
+            f"[{asset_id}] Configuration not found."
+        )
 
     def test_get_asset_config_handles_asset_id_not_in_trading_pairs(self):
         """Test _get_asset_config returns None if asset_id is not in TRADING_PAIRS."""
         # Arrange
         asset_id = "ETH-USD"
         # Use patch.object to temporarily set the attribute, ensuring test isolation
-        with patch.object(self.mock_config_module, 'TRADING_PAIRS', {"BTC-USD": {}}):
+        with patch.object(self.mock_config_module, "TRADING_PAIRS", {"BTC-USD": {}}):
             # Act
             result = self.trade_manager._get_asset_config(asset_id)
 
             # Assert
             self.assertIsNone(result)
-            self.mock_logger.error.assert_called_with(f"[{asset_id}] Configuration not found.")
+            self.mock_logger.error.assert_called_with(
+                f"[{asset_id}] Configuration not found."
+            )
 
     def test_process_cycle_handles_no_product_details(self):
         """Test trade cycle exits gracefully if product details fail to load."""
@@ -284,7 +299,9 @@ class TestTradeManager(unittest.TestCase):
         self.mock_client.get_product.assert_called_once_with(asset_id)
         self.assertEqual(result1, product_details)
         self.assertIn(asset_id, self.trade_manager.product_details_cache)
-        self.assertEqual(self.trade_manager.product_details_cache[asset_id], product_details)
+        self.assertEqual(
+            self.trade_manager.product_details_cache[asset_id], product_details
+        )
 
         # Act: Second call - should use cache
         result2 = self.trade_manager._get_product_details(asset_id)
@@ -313,7 +330,7 @@ class TestTradeManager(unittest.TestCase):
         )
 
     def test_get_product_details_exception_logging(self):
-        """Test that exceptions during product detail fetching are logged with traceback."""
+        """Test exceptions during product detail fetching are logged."""
         # Arrange
         asset_id = "XRP-USD"
         error_message = "API is down"
@@ -417,7 +434,9 @@ class TestTradeManager(unittest.TestCase):
         self.mock_order_calculator_module.determine_sell_orders_params.return_value = []
 
         # Act
-        with patch.object(self.mock_client, 'get_order', return_value=mock_order) as mock_get_order:
+        with patch.object(
+            self.mock_client, "get_order", return_value=mock_order
+        ) as mock_get_order:
             self.trade_manager.process_asset_trade_cycle("BTC-USD")
 
             # Assert
@@ -428,7 +447,9 @@ class TestTradeManager(unittest.TestCase):
                 filled_order=mock_order,
                 sell_orders_params=[],
             )
-            self.mock_persistence.clear_open_buy_order.assert_called_once_with(asset_id="BTC-USD")
+            self.mock_persistence.clear_open_buy_order.assert_called_once_with(
+                asset_id="BTC-USD"
+            )
 
     def test_handle_open_buy_order_is_still_open(self):
         """Test handling a buy order that is still open."""
@@ -459,7 +480,7 @@ class TestTradeManager(unittest.TestCase):
         mock_order_status = {
             "status": "FILLED",
             "filled_size": "1.0",
-            "average_filled_price": "50000"
+            "average_filled_price": "50000",
         }
         self.mock_client.get_order.return_value = mock_order_status
 
@@ -469,7 +490,9 @@ class TestTradeManager(unittest.TestCase):
         }
 
         # Patch the nested call to _handle_filled_buy_order to isolate the test
-        with patch.object(self.trade_manager, '_handle_filled_buy_order') as mock_handle_filled:
+        with patch.object(
+            self.trade_manager, "_handle_filled_buy_order"
+        ) as mock_handle_filled:
             # Act
             self.trade_manager._handle_open_buy_order(
                 asset_id, open_buy_order, product_details, config_asset_params
@@ -478,7 +501,9 @@ class TestTradeManager(unittest.TestCase):
             # Assert
             self.mock_client.get_order.assert_called_once_with(order_id)
             self.mock_persistence.save_filled_buy_trade.assert_called_once()
-            self.mock_persistence.clear_open_buy_order.assert_called_once_with(asset_id=asset_id)
+            self.mock_persistence.clear_open_buy_order.assert_called_once_with(
+                asset_id=asset_id
+            )
             mock_handle_filled.assert_called_once()
             self.mock_logger.warning.assert_not_called()
 
@@ -510,9 +535,15 @@ class TestTradeManager(unittest.TestCase):
         self.trade_manager.process_asset_trade_cycle("BTC-USD")
 
         # Assert
-        self.mock_order_calculator_module.determine_sell_orders_params.assert_called_once()
-        kwargs = self.mock_order_calculator_module.determine_sell_orders_params.call_args.kwargs
-        self.assertEqual(kwargs['sell_profit_tiers'], self.mock_config_module.TRADING_PAIRS["BTC-USD"]['sell_profit_tiers'])
+        determine_sell_params_mock = (
+            self.mock_order_calculator_module.determine_sell_orders_params
+        )
+        determine_sell_params_mock.assert_called_once()
+        kwargs = determine_sell_params_mock.call_args.kwargs
+        self.assertEqual(
+            kwargs["sell_profit_tiers"],
+            self.mock_config_module.TRADING_PAIRS["BTC-USD"]["sell_profit_tiers"],
+        )
 
         self.mock_client.limit_order_sell.assert_called_once_with(
             product_id="BTC-USD",
@@ -542,10 +573,6 @@ class TestTradeManager(unittest.TestCase):
             "sell-1": {"status": "OPEN"},
             "sell-2": {"status": "OPEN"},
         }
-        mock_filled_trade = {
-            "buy_order_id": buy_order_id,
-            "sell_orders": sell_orders,
-        }
 
         # Mock get_order to return FILLED for one order and OPEN for the other
         def get_order_side_effect(order_id):
@@ -566,7 +593,7 @@ class TestTradeManager(unittest.TestCase):
         self.mock_persistence.clear_filled_buy_trade.assert_not_called()
         self.assertEqual(self.mock_client.get_order.call_count, 2)
 
-    def test_handle_filled_buy_order_checks_existing_sell_orders(self):
+    def test_check_and_update_sell_orders_handles_filled_order(self):
         """Test checking the status of existing sell orders."""
         asset_id = "BTC-USD"
         buy_order_id = "buy-123"
@@ -582,7 +609,10 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
         self.mock_client.get_order.assert_called_once_with("sell-456")
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_called_once_with(
             asset_id=asset_id,
             buy_order_id=buy_order_id,
             sell_order_id="sell-456",
@@ -593,8 +623,8 @@ class TestTradeManager(unittest.TestCase):
             asset_id="BTC-USD"
         )
 
-    def test_process_asset_trade_cycle_unhandled_exception_logging(self):
-        """Test that unhandled exceptions in the trade cycle are logged with traceback."""
+    def test_process_asset_cycle_exception_logging(self):
+        """Test unhandled exceptions in the trade cycle are logged."""
         # Arrange
         asset_id = "BTC-USD"
         error_message = "Something went wrong"
@@ -606,16 +636,19 @@ class TestTradeManager(unittest.TestCase):
         # Assert
         self.assertEqual(self.mock_logger.error.call_count, 1)
         call_args, call_kwargs = self.mock_logger.error.call_args
-        self.assertIn(
-            f"[{asset_id}] Unhandled error in process_asset_trade_cycle: {error_message}",
-            call_args[0]
+        expected_msg = (
+            f"[{asset_id}] Unhandled error in process_asset_trade_cycle: "
+            f"{error_message}"
         )
-        self.assertTrue(call_kwargs.get('exc_info'))
+        self.assertIn(expected_msg, call_args[0])
+        self.assertTrue(call_kwargs.get("exc_info"))
         # Also verify that the 'finally' block runs
-        self.mock_logger.info.assert_any_call(f"[{asset_id}] Trade cycle processing finished.")
+        self.mock_logger.info.assert_any_call(
+            f"[{asset_id}] Trade cycle processing finished."
+        )
 
-    def test_check_and_update_sell_orders_continues_after_invalid_order(self):
-        """Test that the loop checking sell orders continues after an invalid one."""
+    def test_check_sell_orders_continues_on_invalid(self):
+        """Test sell order check loop continues after an invalid order."""
         asset_id = "BTC-USD"
         buy_order_id = "buy-abc"
         # An invalid order (empty order_id key) and a valid one
@@ -632,11 +665,16 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
         # Check that the invalid order was logged
-        self.mock_logger.warning.assert_called_with(f"[{asset_id}] Skipping sell order with no ID.")
+        self.mock_logger.warning.assert_called_with(
+            f"[{asset_id}] Skipping sell order with no ID."
+        )
         # Should be called only for the valid order
         self.mock_client.get_order.assert_called_once_with("sell-456")
         # Status should be updated for the valid order
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_called_once_with(
             asset_id=asset_id,
             buy_order_id=buy_order_id,
             sell_order_id="sell-456",
@@ -691,28 +729,31 @@ class TestTradeManager(unittest.TestCase):
         self.assertEqual(
             self.mock_client.get_order.call_count,
             1,
-            "get_order should only be called for orders not already marked as FILLED.",
+            "get_order should only be called for non-FILLED orders.",
         )
         self.mock_client.get_order.assert_called_with("sell-456")
         # Status should only be updated for the OPEN order
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_called_once_with(
             asset_id=asset_id,
             buy_order_id=buy_order_id,
             sell_order_id="sell-456",
             new_status="FILLED",
         )
         # Since both are now filled, the trade should be cleared
-        self.mock_persistence.clear_filled_buy_trade.assert_called_once_with(asset_id=asset_id)
+        self.mock_persistence.clear_filled_buy_trade.assert_called_once_with(
+            asset_id=asset_id
+        )
 
     def test_check_and_update_sell_orders_updates_local_status(self):
-        """Test that _check_and_update_sell_orders correctly updates the local order status."""
+        """Test _check_and_update_sell_orders updates local order status."""
         # Arrange
         asset_id = "BTC-USD"
         buy_order_id = "buy-abc"
         # The method expects a dictionary of orders, keyed by order_id.
-        sell_orders = {
-            "sell-123": {"status": "OPEN"}
-        }
+        sell_orders = {"sell-123": {"status": "OPEN"}}
         self.mock_client.get_order.return_value = {"status": "FILLED"}
 
         # Act
@@ -724,7 +765,10 @@ class TestTradeManager(unittest.TestCase):
         # The primary assertion: the local dictionary's value should be updated.
         self.assertEqual(sell_orders["sell-123"]["status"], "FILLED")
         # Also assert that the persistence layer was called
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_called_once_with(
             asset_id=asset_id,
             buy_order_id=buy_order_id,
             sell_order_id="sell-123",
@@ -748,10 +792,13 @@ class TestTradeManager(unittest.TestCase):
         # Assert
         self.mock_client.get_order.assert_called_once_with("sell-123")
         # Since status is unchanged (default OPEN to remote OPEN), no update call
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_not_called()
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_not_called()
 
     def test_continues_checking_orders_after_one_fails(self):
-        """Test it continues to check sell orders after one fails the API status check."""
+        """Test it continues checking orders after one fails API check."""
         asset_id = "BTC-USD"
         buy_order_id = "buy-abc"
         # An invalid order (empty order_id key) and a valid one
@@ -782,11 +829,14 @@ class TestTradeManager(unittest.TestCase):
             f"[{asset_id}] Failed to get status for sell order sell-2."
         )
         # It should update the status for the one that succeeded.
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_called_once_with(
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_called_once_with(
             asset_id=asset_id,
             buy_order_id=buy_order_id,
-            sell_order_id='sell-3',
-            new_status='FILLED'
+            sell_order_id="sell-3",
+            new_status="FILLED",
         )
         # The trade should not be cleared.
         self.mock_persistence.clear_filled_buy_trade.assert_not_called()
@@ -812,12 +862,15 @@ class TestTradeManager(unittest.TestCase):
         # The client should have been called for the open order.
         self.mock_client.get_order.assert_called_once_with("sell-2")
         # No update should be called because the status hasn't changed.
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_not_called()
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_not_called()
         # The trade should not be cleared because one order is still open.
         self.mock_persistence.clear_filled_buy_trade.assert_not_called()
 
     def test_exception_in_sell_order_check_logs_traceback(self):
-        """Test that an exception during a sell order check logs a traceback."""
+        """Test exception during sell order check logs traceback."""
         asset_id = "BTC-USD"
         buy_order_id = "buy-abc"
         sell_orders = {
@@ -864,13 +917,15 @@ class TestTradeManager(unittest.TestCase):
         # The client should only be called for the OPEN order.
         self.mock_client.get_order.assert_called_once_with("sell-2")
         # No update should happen because of the exception.
-        self.mock_persistence.update_sell_order_status_in_filled_trade.assert_not_called()
+        update_status_mock = (
+            self.mock_persistence.update_sell_order_status_in_filled_trade
+        )
+        update_status_mock.assert_not_called()
         # The trade should not be cleared.
         self.mock_persistence.clear_filled_buy_trade.assert_not_called()
         # An error should be logged.
         self.mock_logger.error.assert_called_with(
-            f"[{asset_id}] Error checking sell order sell-2: API Error",
-            exc_info=True
+            f"[{asset_id}] Error checking sell order sell-2: API Error", exc_info=True
         )
 
     def test_place_new_sell_orders_uses_correct_buy_details(self):
@@ -910,20 +965,29 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
         # Verify that the order calculator was called with the correct Decimal buy_price
-        self.mock_order_calculator_module.determine_sell_orders_params.assert_called_once()
-        _ , call_kwargs = (
-            self.mock_order_calculator_module.determine_sell_orders_params.call_args
+        determine_params_mock = (
+            self.mock_order_calculator_module.determine_sell_orders_params
         )
+        determine_params_mock.assert_called_once()
+        _, call_kwargs = determine_params_mock.call_args
         self.assertEqual(call_kwargs["buy_price"], buy_price)
         self.assertEqual(call_kwargs["buy_quantity"], buy_quantity)
 
         # Verify that limit_order_sell was called with the correct parameters
         self.assertEqual(self.mock_client.limit_order_sell.call_count, 2)
         calls = self.mock_client.limit_order_sell.call_args_list
-        self.assertEqual(calls[0].kwargs["base_size"], sell_order_params[0]["base_size"])
-        self.assertEqual(calls[0].kwargs["limit_price"], sell_order_params[0]["limit_price"])
-        self.assertEqual(calls[1].kwargs["base_size"], sell_order_params[1]["base_size"])
-        self.assertEqual(calls[1].kwargs["limit_price"], sell_order_params[1]["limit_price"])
+        self.assertEqual(
+            calls[0].kwargs["base_size"], sell_order_params[0]["base_size"]
+        )
+        self.assertEqual(
+            calls[0].kwargs["limit_price"], sell_order_params[0]["limit_price"]
+        )
+        self.assertEqual(
+            calls[1].kwargs["base_size"], sell_order_params[1]["base_size"]
+        )
+        self.assertEqual(
+            calls[1].kwargs["limit_price"], sell_order_params[1]["limit_price"]
+        )
 
     def test_place_new_sell_orders_logs_individual_and_summary_messages(self):
         """Test that individual and summary sell order logs are correct."""
@@ -972,7 +1036,8 @@ class TestTradeManager(unittest.TestCase):
 
         # Expected summary log
         expected_summary_log = (
-            f"[{asset_id}] Successfully placed and saved {len(sell_order_params)} sell orders."
+            f"[{asset_id}] Successfully placed and saved "
+            f"{len(sell_order_params)} sell orders."
         )
 
         # Check that the logs were called in the correct order.
@@ -995,16 +1060,18 @@ class TestTradeManager(unittest.TestCase):
             if actual_log_messages[i] == calls_to_check[0].args[0]:
                 start_index = i
                 break
-        
-        self.assertNotEqual(start_index, -1, "The start of the expected log sequence was not found.")
+
+        self.assertNotEqual(
+            start_index, -1, "The start of the expected log sequence was not found."
+        )
 
         self.assertEqual(
             actual_calls[start_index : start_index + len(calls_to_check)],
-            calls_to_check
+            calls_to_check,
         )
 
-    def test_place_new_sell_orders_uses_generated_client_order_id(self):
-        """Test that a newly generated client_order_id is used for placing sell orders."""
+    def test_place_sell_orders_uses_generated_id(self):
+        """Test that generated client_order_id is used for sell orders."""
         # Arrange
         asset_id = "BTC-USD"
         filled_buy_trade = {
@@ -1041,7 +1108,9 @@ class TestTradeManager(unittest.TestCase):
         call_kwargs = self.mock_client.limit_order_sell.call_args.kwargs
         self.assertEqual(call_kwargs["client_order_id"], expected_client_order_id)
         self.assertEqual(call_kwargs["base_size"], sell_order_params[0]["base_size"])
-        self.assertEqual(call_kwargs["limit_price"], sell_order_params[0]["limit_price"])
+        self.assertEqual(
+            call_kwargs["limit_price"], sell_order_params[0]["limit_price"]
+        )
 
     def test_place_new_sell_orders_handles_placement_failure(self):
         """Test that a failure to place a sell order is handled correctly."""
@@ -1074,11 +1143,16 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
         # Check that the failure was logged as an error
-        expected_error_log = f"[{asset_id}] Failed to place sell order. Reason: {failure_reason}"
+        expected_error_log = (
+            f"[{asset_id}] Failed to place sell order. Reason: {failure_reason}"
+        )
         self.mock_logger.error.assert_any_call(expected_error_log)
 
         # Check that the warning about reprocessing was logged
-        expected_warning_log = f"[{asset_id}] No sell orders were successfully placed. The filled buy trade will be re-processed."
+        expected_warning_log = (
+            f"[{asset_id}] No sell orders were successfully placed. "
+            "The filled buy trade will be re-processed."
+        )
         self.mock_logger.warning.assert_called_once_with(expected_warning_log)
 
         # Check that no sell order was persisted
@@ -1090,11 +1164,11 @@ class TestTradeManager(unittest.TestCase):
         all_info_calls = [call[0][0] for call in self.mock_logger.info.call_args_list]
         self.assertFalse(
             any("Successfully placed" in call for call in all_info_calls),
-            "The 'Successfully placed' log should not be present on failure."
+            "The 'Successfully placed' log should not be present on failure.",
         )
 
-    def test_init_raises_error_on_none_persistence_manager(self):
-        """Test that TradeManager raises an AssertionError if persistence_manager is None."""
+    def test_init_raises_on_none_persistence(self):
+        """Test TradeManager raises AssertionError if persistence is None."""
         with self.assertRaisesRegex(
             AssertionError, "PersistenceManager dependency cannot be None"
         ):
@@ -1108,8 +1182,8 @@ class TestTradeManager(unittest.TestCase):
                 order_calculator=self.mock_order_calculator_module,
             )
 
-    def test_main_logic_routes_to_filled_buy_handler(self):
-        """Test that _main_trade_logic calls _handle_filled_buy_order when a filled buy exists."""
+    def test_main_logic_routes_to_filled_buy(self):
+        """Test _main_trade_logic calls _handle_filled_buy_order for filled buys."""
         # Arrange
         from unittest.mock import patch
 
@@ -1119,7 +1193,9 @@ class TestTradeManager(unittest.TestCase):
             "open_buy_order": None,
         }
 
-        with patch("trading.trade_manager.TradeManager._handle_filled_buy_order") as mock_handle_filled_buy:
+        with patch(
+            "trading.trade_manager.TradeManager._handle_filled_buy_order"
+        ) as mock_handle_filled_buy:
             # Act
             self.trade_manager.process_asset_trade_cycle(asset_id)
 
@@ -1144,7 +1220,7 @@ class TestTradeManager(unittest.TestCase):
         # One order is filled, the other is still open
         self.mock_client.get_order.side_effect = [
             {"status": "FILLED"},  # For sell-1
-            {"status": "OPEN"},    # For sell-2
+            {"status": "OPEN"},  # For sell-2
         ]
 
         with patch.object(
@@ -1208,8 +1284,8 @@ class TestTradeManager(unittest.TestCase):
             sell_order_details=expected_sell_details,
         )
 
-    def test_sell_order_failure_logs_default_message_when_no_reason_provided(self):
-        """Test that the default error message is logged when a failure reason is not provided."""
+    def test_sell_order_failure_logs_default_message(self):
+        """Test default error message is logged if no failure reason is given."""
         # Arrange
         asset_id = "BTC-USD"
         filled_buy_trade = {
@@ -1237,7 +1313,9 @@ class TestTradeManager(unittest.TestCase):
         self.trade_manager.process_asset_trade_cycle(asset_id)
 
         # Assert
-        expected_error_log = f"[{asset_id}] Failed to place sell order. Reason: No message"
+        expected_error_log = (
+            f"[{asset_id}] Failed to place sell order. Reason: No message"
+        )
         self.mock_logger.error.assert_any_call(expected_error_log)
 
     def test_place_new_sell_orders_exception_logs_traceback(self):
@@ -1256,7 +1334,9 @@ class TestTradeManager(unittest.TestCase):
 
         # Mock an exception during sell order calculation
         error_message = "Calculation Error"
-        self.mock_order_calculator_module.determine_sell_orders_params.side_effect = ValueError(error_message)
+        self.mock_order_calculator_module.determine_sell_orders_params.side_effect = (
+            ValueError(error_message)
+        )
 
         # Act
         self.trade_manager.process_asset_trade_cycle(asset_id)
@@ -1264,7 +1344,7 @@ class TestTradeManager(unittest.TestCase):
         # Assert
         self.mock_logger.error.assert_called_once_with(
             f"[{asset_id}] Exception in _place_new_sell_orders: {error_message}",
-            exc_info=True
+            exc_info=True,
         )
 
     def test_place_new_sell_orders_handles_missing_key(self):
@@ -1288,10 +1368,12 @@ class TestTradeManager(unittest.TestCase):
         # The code should catch the KeyError and log it
         self.mock_logger.error.assert_called_once()
         logged_message = self.mock_logger.error.call_args[0][0]
-        self.assertIn(f"[{asset_id}] Exception in _place_new_sell_orders", logged_message)
+        self.assertIn(
+            f"[{asset_id}] Exception in _place_new_sell_orders", logged_message
+        )
         self.assertIn("'buy_quantity'", logged_message)
         # Ensure traceback is logged
-        self.assertEqual(self.mock_logger.error.call_args[1], {'exc_info': True})
+        self.assertEqual(self.mock_logger.error.call_args[1], {"exc_info": True})
         # Ensure no sell orders were placed
         self.mock_client.limit_order_sell.assert_not_called()
 
@@ -1326,9 +1408,11 @@ class TestTradeManager(unittest.TestCase):
         # Assert
         self.mock_logger.error.assert_called_once()
         logged_message = self.mock_logger.error.call_args[0][0]
-        self.assertIn(f"[{asset_id}] Exception in _place_new_sell_orders", logged_message)
+        self.assertIn(
+            f"[{asset_id}] Exception in _place_new_sell_orders", logged_message
+        )
         self.assertIn("'base_size'", logged_message)
-        self.assertEqual(self.mock_logger.error.call_args[1], {'exc_info': True})
+        self.assertEqual(self.mock_logger.error.call_args[1], {"exc_info": True})
         self.mock_client.limit_order_sell.assert_not_called()
 
     def test_place_new_sell_orders_handles_key_error_on_price(self):
@@ -1362,13 +1446,15 @@ class TestTradeManager(unittest.TestCase):
         # Assert
         self.mock_logger.error.assert_called_once()
         logged_message = self.mock_logger.error.call_args[0][0]
-        self.assertIn(f"[{asset_id}] Exception in _place_new_sell_orders", logged_message)
+        self.assertIn(
+            f"[{asset_id}] Exception in _place_new_sell_orders", logged_message
+        )
         self.assertIn("'limit_price'", logged_message)
-        self.assertEqual(self.mock_logger.error.call_args[1], {'exc_info': True})
+        self.assertEqual(self.mock_logger.error.call_args[1], {"exc_info": True})
         self.mock_client.limit_order_sell.assert_not_called()
 
-    def test_handle_open_buy_order_filled_with_no_filled_size(self):
-        """Test handling a filled buy order when API response is missing 'filled_size'."""
+    def test_handle_buy_filled_with_no_filled_size(self):
+        """Test handling a filled buy order with no 'filled_size' in API response."""
         # Arrange
         asset_id = "BTC-USD"
         order_id = "buy-123"
@@ -1383,11 +1469,15 @@ class TestTradeManager(unittest.TestCase):
         }
 
         # Act
-        with patch.object(self.mock_client, 'get_order', return_value={
-            "status": "FILLED",
-            "average_filled_price": "50001",
-            # 'filled_size' is missing
-        }) as mock_get_order:
+        with patch.object(
+            self.mock_client,
+            "get_order",
+            return_value={
+                "status": "FILLED",
+                "average_filled_price": "50001",
+                # 'filled_size' is missing
+            },
+        ) as mock_get_order:
             self.trade_manager.process_asset_trade_cycle(asset_id)
 
             # Assert
@@ -1407,9 +1497,13 @@ class TestTradeManager(unittest.TestCase):
         product_details = self.mock_client.get_product.return_value
         mock_candles = MagicMock()
 
-        with patch.object(self.trade_manager, '_analyze_market_for_buy_signal', return_value=mock_candles) as mock_analyze, \
-             patch.object(self.trade_manager, '_execute_buy_order') as mock_execute:
-
+        with patch.object(
+            self.trade_manager,
+            "_analyze_market_for_buy_signal",
+            return_value=mock_candles,
+        ) as mock_analyze, patch.object(
+            self.trade_manager, "_execute_buy_order"
+        ) as mock_execute:
             # Act
             self.trade_manager._handle_new_buy_order(
                 asset_id, product_details, config_asset_params
@@ -1439,8 +1533,11 @@ class TestTradeManager(unittest.TestCase):
         product_details = {}
         config_asset_params = {}
 
-        with patch.object(self.trade_manager, '_check_and_update_sell_orders') as mock_check_sells, \
-             patch.object(self.trade_manager, '_place_new_sell_orders') as mock_place_sells:
+        with patch.object(
+            self.trade_manager, "_check_and_update_sell_orders"
+        ) as mock_check_sells, patch.object(
+            self.trade_manager, "_place_new_sell_orders"
+        ) as mock_place_sells:
             # Act
             self.trade_manager._handle_filled_buy_order(
                 asset_id, mock_filled_trade, product_details, config_asset_params
@@ -1470,11 +1567,15 @@ class TestTradeManager(unittest.TestCase):
         }
 
         # Act
-        with patch.object(self.mock_client, 'get_order', return_value={
-            "status": "FILLED",
-            "filled_size": None,  # Decimal(None) raises TypeError
-            "average_filled_price": "50001",
-        }) as mock_get_order:
+        with patch.object(
+            self.mock_client,
+            "get_order",
+            return_value={
+                "status": "FILLED",
+                "filled_size": None,  # Decimal(None) raises TypeError
+                "average_filled_price": "50001",
+            },
+        ) as mock_get_order:
             self.trade_manager.process_asset_trade_cycle(asset_id)
 
             # Assert
@@ -1482,11 +1583,13 @@ class TestTradeManager(unittest.TestCase):
             # Check that the error was logged with a traceback
             self.mock_logger.error.assert_called_once()
         args, kwargs = self.mock_logger.error.call_args
-        self.assertIn(f"[{asset_id}] Exception checking open buy order {order_id}", args[0])
+        self.assertIn(
+            f"[{asset_id}] Exception checking open buy order {order_id}", args[0]
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
-    def test_handle_open_buy_order_filled_with_no_avg_price(self):
-        """Test handling a filled buy order when API response is missing 'average_filled_price'."""
+    def test_handle_buy_filled_with_no_avg_price(self):
+        """Test handling a filled buy order with no 'average_filled_price'."""
         # Arrange
         asset_id = "BTC-USD"
         order_id = "buy-123"
@@ -1501,7 +1604,9 @@ class TestTradeManager(unittest.TestCase):
             # 'average_filled_price' is missing
         }
 
-        with patch.object(self.trade_manager, "_handle_filled_buy_order") as mock_handle_filled:
+        with patch.object(
+            self.trade_manager, "_handle_filled_buy_order"
+        ) as mock_handle_filled:
             # Act
             self.trade_manager._handle_open_buy_order(
                 asset_id, open_buy_order, product_details, config_asset_params
@@ -1518,8 +1623,8 @@ class TestTradeManager(unittest.TestCase):
             )
             self.mock_logger.error.assert_not_called()
 
-    def test_handle_open_buy_order_filled_with_invalid_avg_price(self):
-        """Test handling a filled buy order with an invalid 'average_filled_price' string."""
+    def test_handle_buy_filled_with_invalid_avg_price(self):
+        """Test handling a filled buy with an invalid 'average_filled_price'."""
         # Arrange
         asset_id = "BTC-USD"
         order_id = "buy-123"
@@ -1533,7 +1638,9 @@ class TestTradeManager(unittest.TestCase):
             "average_filled_price": "not-a-decimal",
         }
 
-        with patch.object(self.trade_manager, "_handle_filled_buy_order") as mock_handle_filled:
+        with patch.object(
+            self.trade_manager, "_handle_filled_buy_order"
+        ) as mock_handle_filled:
             # Act
             self.trade_manager._handle_open_buy_order(
                 asset_id, open_buy_order, product_details, config_asset_params
@@ -1542,9 +1649,11 @@ class TestTradeManager(unittest.TestCase):
             # Assert
             mock_handle_filled.assert_not_called()
             # An error should be logged for the invalid price.
-            self.mock_logger.error.assert_called_once_with(
-                f"[{asset_id}] Invalid 'average_filled_price' received for order {order_id}."
+            expected_log = (
+                f"[{asset_id}] Invalid 'average_filled_price' "
+                f"received for order {order_id}."
             )
+            self.mock_logger.error.assert_called_once_with(expected_log)
             # A warning should be logged because avg_price defaults to 0.
             self.mock_logger.warning.assert_called_once_with(
                 f"[{asset_id}] Buy order {order_id} filled but with 0 size or price."
@@ -1566,7 +1675,9 @@ class TestTradeManager(unittest.TestCase):
             "average_filled_price": "0",
         }
 
-        with patch.object(self.trade_manager, "_handle_filled_buy_order") as mock_handle_filled:
+        with patch.object(
+            self.trade_manager, "_handle_filled_buy_order"
+        ) as mock_handle_filled:
             # Act
             self.trade_manager._handle_open_buy_order(
                 asset_id, open_buy_order, product_details, config_asset_params
@@ -1581,8 +1692,8 @@ class TestTradeManager(unittest.TestCase):
             )
             self.mock_logger.error.assert_not_called()
 
-    def test_handle_open_buy_order_filled_with_low_avg_price(self):
-        """Test handling a filled buy order with a low but valid average_filled_price (e.g., 1)."""
+    def test_handle_buy_filled_with_low_avg_price(self):
+        """Test handling a filled buy with a low but valid 'average_filled_price'."""
         # Arrange
         asset_id = "BTC-USD"
         order_id = "buy-123"
@@ -1597,7 +1708,9 @@ class TestTradeManager(unittest.TestCase):
             "average_filled_price": "1",
         }
 
-        with patch.object(self.trade_manager, "_handle_filled_buy_order") as mock_handle_filled:
+        with patch.object(
+            self.trade_manager, "_handle_filled_buy_order"
+        ) as mock_handle_filled:
             # Act
             self.trade_manager._handle_open_buy_order(
                 asset_id, open_buy_order, product_details, config_asset_params
@@ -1637,8 +1750,8 @@ class TestTradeManager(unittest.TestCase):
             asset_id=asset_id
         )
 
-    def test_analyze_market_for_buy_signal_converts_columns_to_numeric(self):
-        """Test that _analyze_market_for_buy_signal converts data columns to numeric types."""
+    def test_analyze_market_converts_columns_to_numeric(self):
+        """Test _analyze_market_for_buy_signal converts columns to numeric."""
         # Arrange
         asset_id = "BTC-USD"
         config_asset_params = self.mock_config_module.TRADING_PAIRS[asset_id]
@@ -1670,11 +1783,14 @@ class TestTradeManager(unittest.TestCase):
         for col in ["open", "high", "low", "close", "volume"]:
             self.assertTrue(
                 pd.api.types.is_numeric_dtype(candles_df[col]),
-                f"Column '{col}' should be numeric but has dtype {candles_df[col].dtype}",
+                (
+                    f"Column '{col}' should be numeric "
+                    f"but has dtype {candles_df[col].dtype}"
+                ),
             )
 
-    def test_analyze_market_for_buy_signal_does_not_log_on_success(self):
-        """Test that _analyze_market_for_buy_signal does not log errors on a successful run."""
+    def test_analyze_market_does_not_log_on_success(self):
+        """Test _analyze_market_for_buy_signal does not log on success."""
         # Arrange
         asset_id = "BTC-USD"
         config_asset_params = self.mock_config_module.TRADING_PAIRS[asset_id]
@@ -1711,7 +1827,9 @@ class TestTradeManager(unittest.TestCase):
         # Assert
         self.mock_logger.error.assert_called_once()
         args, kwargs = self.mock_logger.error.call_args
-        self.assertIn(f"[{asset_id}] Unhandled error in process_asset_trade_cycle", args[0])
+        self.assertIn(
+            f"[{asset_id}] Unhandled error in process_asset_trade_cycle", args[0]
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_check_and_update_sell_orders_handles_none_from_get_order(self):
@@ -1721,16 +1839,14 @@ class TestTradeManager(unittest.TestCase):
         buy_order_id = "buy-abc"
         sell_order_id = "sell-123"
         sell_orders = {
-            sell_order_id: {
-                "status": "OPEN",
-                "size": "0.1",
-                "price": "60000"
-            }
+            sell_order_id: {"status": "OPEN", "size": "0.1", "price": "60000"}
         }
         self.mock_client.get_order.return_value = None
 
         # Act
-        self.trade_manager._check_and_update_sell_orders(asset_id, buy_order_id, sell_orders)
+        self.trade_manager._check_and_update_sell_orders(
+            asset_id, buy_order_id, sell_orders
+        )
 
         # Assert
         self.mock_logger.warning.assert_called_once_with(
@@ -1764,7 +1880,9 @@ class TestTradeManager(unittest.TestCase):
 
     def test_init_raises_assertion_error_if_ta_module_is_none(self):
         """Test __init__ raises AssertionError if ta_module is None."""
-        with pytest.raises(AssertionError, match=r"TA module dependency cannot be None"):
+        with pytest.raises(
+            AssertionError, match=r"TA module dependency cannot be None"
+        ):
             TradeManager(
                 client=self.mock_client,
                 persistence_manager=self.mock_persistence,
@@ -1791,7 +1909,9 @@ class TestTradeManager(unittest.TestCase):
         self.trade_manager.ta_module.calculate_rsi.return_value = None
 
         # Act
-        result = self.trade_manager._analyze_market_for_buy_signal(asset_id, config_asset_params)
+        result = self.trade_manager._analyze_market_for_buy_signal(
+            asset_id, config_asset_params
+        )
 
         # Assert
         self.assertIsNone(result)
@@ -1810,13 +1930,19 @@ class TestTradeManager(unittest.TestCase):
         self.mock_client.get_public_candles.side_effect = Exception(error_message)
 
         # Act
-        result = self.trade_manager._analyze_market_for_buy_signal(asset_id, config_asset_params)
+        result = self.trade_manager._analyze_market_for_buy_signal(
+            asset_id, config_asset_params
+        )
 
         # Assert
         self.assertIsNone(result)
         self.mock_logger.error.assert_called_once()
         call_args, call_kwargs = self.mock_logger.error.call_args
-        self.assertIn(f"[{asset_id}] Exception in _analyze_market_for_buy_signal: {error_message}", call_args[0])
+        expected_log = (
+            f"[{asset_id}] Exception in _analyze_market_for_buy_signal: "
+            f"{error_message}"
+        )
+        self.assertIn(expected_log, call_args[0])
         self.assertTrue(call_kwargs.get("exc_info"))
 
     def test_execute_buy_order_uses_last_candle_close_price(self):
@@ -1837,15 +1963,26 @@ class TestTradeManager(unittest.TestCase):
 
         buy_size = Decimal("0.001")
         buy_price = Decimal("51500")
-        self.trade_manager.order_calculator.calculate_buy_order_details.return_value = (buy_size, buy_price)
+        self.trade_manager.order_calculator.calculate_buy_order_details.return_value = (
+            buy_size,
+            buy_price,
+        )
         expected_client_order_id = "test-order-id"
 
         # Act
-        self.trade_manager._execute_buy_order(asset_id, product_details, config_asset_params, candles)
+        self.trade_manager._execute_buy_order(
+            asset_id, product_details, config_asset_params, candles
+        )
 
         # Assert
-        self.trade_manager.order_calculator.calculate_buy_order_details.assert_called_once()
-        _, kwargs = self.trade_manager.order_calculator.calculate_buy_order_details.call_args
+        calculate_details_mock = (
+            self.trade_manager.order_calculator.calculate_buy_order_details
+        )
+        calculate_details_mock.assert_called_once()
+        (
+            _,
+            kwargs,
+        ) = calculate_details_mock.call_args
         self.assertEqual(kwargs["last_close_price"], last_candle_close)
 
         self.mock_client.limit_order_buy.assert_called_once_with(
@@ -1868,7 +2005,10 @@ class TestTradeManager(unittest.TestCase):
 
         buy_size = Decimal("0.001")
         buy_price = Decimal("51500")
-        self.trade_manager.order_calculator.calculate_buy_order_details.return_value = (buy_size, buy_price)
+        self.trade_manager.order_calculator.calculate_buy_order_details.return_value = (
+            buy_size,
+            buy_price,
+        )
 
         # Mock a failed order placement
         error_message = "Insufficient funds"
@@ -1878,10 +2018,14 @@ class TestTradeManager(unittest.TestCase):
         }
 
         # Act
-        self.trade_manager._execute_buy_order(asset_id, product_details, config_asset_params, candles)
+        self.trade_manager._execute_buy_order(
+            asset_id, product_details, config_asset_params, candles
+        )
 
         # Assert
-        expected_log_message = f"[{asset_id}] Failed to place buy order. Reason: {error_message}"
+        expected_log_message = (
+            f"[{asset_id}] Failed to place buy order. Reason: {error_message}"
+        )
         self.mock_logger.error.assert_called_once_with(expected_log_message)
         self.mock_persistence.save_open_buy_order.assert_not_called()
 
@@ -1898,7 +2042,10 @@ class TestTradeManager(unittest.TestCase):
 
         buy_size = Decimal("0.001")
         buy_price = Decimal("51500")
-        self.trade_manager.order_calculator.calculate_buy_order_details.return_value = (buy_size, buy_price)
+        self.trade_manager.order_calculator.calculate_buy_order_details.return_value = (
+            buy_size,
+            buy_price,
+        )
 
         # Mock a failed order placement with no specific message
         self.mock_client.limit_order_buy.return_value = {
@@ -1907,10 +2054,14 @@ class TestTradeManager(unittest.TestCase):
         }
 
         # Act
-        self.trade_manager._execute_buy_order(asset_id, product_details, config_asset_params, candles)
+        self.trade_manager._execute_buy_order(
+            asset_id, product_details, config_asset_params, candles
+        )
 
         # Assert
-        expected_log_message = f"[{asset_id}] Failed to place buy order. Reason: No message"
+        expected_log_message = (
+            f"[{asset_id}] Failed to place buy order. Reason: No message"
+        )
         self.mock_logger.error.assert_called_once_with(expected_log_message)
         self.mock_persistence.save_open_buy_order.assert_not_called()
 
@@ -1934,10 +2085,13 @@ class TestTradeManager(unittest.TestCase):
         self.mock_client.get_order.return_value = order_status
 
         sell_params = {"tier_1": "params"}
-        self.trade_manager.order_calculator.determine_sell_orders_params.return_value = sell_params
+        mock_order_calculator = self.trade_manager.order_calculator
+        mock_order_calculator.determine_sell_orders_params.return_value = sell_params
 
         # Patch the method that gets called after the transition
-        with patch.object(self.trade_manager, '_handle_filled_buy_order') as mock_handle_filled:
+        with patch.object(
+            self.trade_manager, "_handle_filled_buy_order"
+        ) as mock_handle_filled:
             # Act
             self.trade_manager._handle_open_buy_order(
                 asset_id, open_buy_order, product_details, config_asset_params
@@ -1964,11 +2118,15 @@ class TestTradeManager(unittest.TestCase):
         """
         # Arrange
         asset_id = "BTC-USD"
-        
+
         # Patch a method that is called immediately after the config check
-        with patch.object(self.trade_manager, '_get_product_details') as mock_get_product_details:
+        with patch.object(
+            self.trade_manager, "_get_product_details"
+        ) as mock_get_product_details:
             # Configure mocks to prevent downstream errors
-            mock_get_product_details.return_value = self.mock_client.get_product.return_value
+            mock_get_product_details.return_value = (
+                self.mock_client.get_product.return_value
+            )
             self.mock_persistence.load_open_buy_order.return_value = None
             self.mock_persistence.load_filled_buy_trade.return_value = None
             self.trade_manager._handle_new_buy_order = Mock()
@@ -1994,15 +2152,22 @@ class TestTradeManager(unittest.TestCase):
         test_exception = Exception("Something went wrong")
 
         # Force an exception
-        self.trade_manager.order_calculator.calculate_buy_order_details.side_effect = test_exception
+        self.trade_manager.order_calculator.calculate_buy_order_details.side_effect = (
+            test_exception
+        )
 
         # Act
-        self.trade_manager._execute_buy_order(asset_id, product_details, config_asset_params, candles)
+        self.trade_manager._execute_buy_order(
+            asset_id, product_details, config_asset_params, candles
+        )
 
         # Assert
         self.mock_logger.error.assert_called_once()
         call_args, call_kwargs = self.mock_logger.error.call_args
-        self.assertIn(f"[{asset_id}] Exception in _execute_buy_order: {test_exception}", call_args[0])
+        self.assertIn(
+            f"[{asset_id}] Exception in _execute_buy_order: {test_exception}",
+            call_args[0],
+        )
         self.assertTrue(call_kwargs.get("exc_info"))
 
     def test_check_and_update_sell_orders_clears_trade_state_when_all_filled(self):
@@ -2041,10 +2206,15 @@ class TestTradeManager(unittest.TestCase):
             Decimal("0.00019"),
             Decimal("51000.00"),
         )
-        self.mock_client.limit_order_buy.return_value = {"success": True, "order_id": "new-buy-order"}
+        self.mock_client.limit_order_buy.return_value = {
+            "success": True,
+            "order_id": "new-buy-order",
+        }
 
         # Act
-        self.trade_manager._execute_buy_order(asset_id, product_details, config_asset_params, candles)
+        self.trade_manager._execute_buy_order(
+            asset_id, product_details, config_asset_params, candles
+        )
 
         # Assert
         self.mock_logger.error.assert_not_called()
@@ -2068,10 +2238,15 @@ class TestTradeManager(unittest.TestCase):
         self.mock_client.limit_order_buy.return_value = {"success": True}
 
         # Act
-        self.trade_manager._execute_buy_order(asset_id, product_details, config_asset_params, candles)
+        self.trade_manager._execute_buy_order(
+            asset_id, product_details, config_asset_params, candles
+        )
 
         # Assert
-        expected_error_log = f"[{asset_id}] Order placed successfully but no order_id returned from exchange."
+        expected_error_log = (
+            f"[{asset_id}] Order placed successfully but no "
+            "order_id returned from exchange."
+        )
         self.mock_logger.error.assert_called_once_with(expected_error_log)
         self.mock_persistence.save_trade_state.assert_not_called()
 
@@ -2125,8 +2300,8 @@ class TestTradeManager(unittest.TestCase):
         )
         self.mock_client.limit_order_sell.assert_not_called()
 
-    def test_analyze_market_for_buy_signal_integration_with_real_ta_module(self):
-        """Integration test to ensure that a real TA module can process the candles DataFrame."""
+    def test_analyze_market_integration_with_real_ta(self):
+        """Test integration with real TA module for candle processing."""
         # Arrange
         asset_id = "BTC-USD"
         config_asset_params = self.mock_config_module.TRADING_PAIRS[asset_id]
@@ -2149,10 +2324,12 @@ class TestTradeManager(unittest.TestCase):
         self.mock_signal_analyzer_module.should_buy_asset.return_value = True
 
         # Act & Assert
-        # This should run without raising an exception because the columns are correctly converted to numeric
+        # This should run without error as columns are converted to numeric
         try:
             self.trade_manager._analyze_market_for_buy_signal(
                 asset_id, config_asset_params
             )
         except Exception as e:
-            self.fail(f"_analyze_market_for_buy_signal raised an unexpected exception: {e}")
+            self.fail(
+                f"_analyze_market_for_buy_signal raised an unexpected exception: {e}"
+            )

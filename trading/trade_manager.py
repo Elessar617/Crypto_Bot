@@ -28,7 +28,9 @@ class TradeManager:
     ):
         """Initializes the TradeManager."""
         assert client is not None, "CoinbaseClient dependency cannot be None"
-        assert persistence_manager is not None, "PersistenceManager dependency cannot be None"
+        assert (
+            persistence_manager is not None
+        ), "PersistenceManager dependency cannot be None"
         assert ta_module is not None, "TA module dependency cannot be None"
         assert config_module is not None, "Config module dependency cannot be None"
         assert logger is not None, "Logger dependency cannot be None"
@@ -191,9 +193,11 @@ class TradeManager:
 
                 new_status = updated_order.get("status")
                 if new_status and current_status != new_status:
-                    self.logger.info(
-                        f"[{asset_id}] Sell order {order_id} status updated to {new_status}."
+                    log_message = (
+                        f"[{asset_id}] Sell order {order_id} status "
+                        f"updated to {new_status}."
                     )
+                    self.logger.info(log_message)
                     self.persistence_manager.update_sell_order_status_in_filled_trade(
                         asset_id=asset_id,
                         buy_order_id=buy_order_id,
@@ -240,9 +244,11 @@ class TradeManager:
             )
 
             if not sell_order_params:
-                self.logger.error(
-                    f"[{asset_id}] No sell orders were generated. Check config and logs."
+                log_message = (
+                    f"[{asset_id}] No sell orders were generated. "
+                    "Check config and logs."
                 )
+                self.logger.error(log_message)
                 return
 
             placed_orders = 0
@@ -283,18 +289,24 @@ class TradeManager:
                 elif order_result:
                     error_response = order_result.get("error_response", {})
                     error_message = error_response.get("message", "No message")
-                    self.logger.error(
-                        f"[{asset_id}] Failed to place sell order. Reason: {error_message}"
+                    log_message = (
+                        f"[{asset_id}] Failed to place sell order. "
+                        f"Reason: {error_message}"
                     )
+                    self.logger.error(log_message)
 
             if placed_orders == 0:
-                self.logger.warning(
-                    f"[{asset_id}] No sell orders were successfully placed. The filled buy trade will be re-processed."
+                log_message = (
+                    f"[{asset_id}] No sell orders were successfully placed. "
+                    "The filled buy trade will be re-processed."
                 )
+                self.logger.warning(log_message)
             else:
-                self.logger.info(
-                    f"[{asset_id}] Successfully placed and saved {placed_orders} sell orders."
+                log_message = (
+                    f"[{asset_id}] Successfully placed and saved "
+                    f"{placed_orders} sell orders."
                 )
+                self.logger.info(log_message)
 
         except Exception as e:
             self.logger.error(
@@ -328,18 +340,22 @@ class TradeManager:
                 try:
                     avg_price = Decimal(order_status.get("average_filled_price", "0"))
                 except InvalidOperation:
-                    self.logger.error(
-                        f"[{asset_id}] Invalid 'average_filled_price' received for order {order_id}."
+                    log_message = (
+                        f"[{asset_id}] Invalid 'average_filled_price' "
+                        f"received for order {order_id}."
                     )
+                    self.logger.error(log_message)
                     avg_price = Decimal("0")
 
                 if filled_size > 0 and avg_price > 0:
-                    sell_orders_params = self.order_calculator.determine_sell_orders_params(
-                        buy_price=avg_price,
-                        buy_quantity=filled_size,
-                        sell_profit_tiers=config_asset_params["sell_profit_tiers"],
-                        product_details=product_details,
-                        logger=self.logger,
+                    sell_orders_params = (
+                        self.order_calculator.determine_sell_orders_params(
+                            buy_price=avg_price,
+                            buy_quantity=filled_size,
+                            sell_profit_tiers=config_asset_params["sell_profit_tiers"],
+                            product_details=product_details,
+                            logger=self.logger,
+                        )
                     )
 
                     self.persistence_manager.save_filled_buy_trade(
@@ -366,9 +382,11 @@ class TradeManager:
                         config_asset_params,
                     )
                 else:
-                    self.logger.warning(
-                        f"[{asset_id}] Buy order {order_id} filled but with 0 size or price."
+                    log_message = (
+                        f"[{asset_id}] Buy order {order_id} filled "
+                        "but with 0 size or price."
                     )
+                    self.logger.warning(log_message)
             elif status == "OPEN":
                 self.logger.info(f"[{asset_id}] Buy order {order_id} is still open.")
             elif status == "CANCELLED":
@@ -429,8 +447,8 @@ class TradeManager:
     def _execute_buy_order(
         self,
         asset_id: str,
-        product_details: dict[str, any],
-        config_asset_params: dict[str, any],
+        product_details: dict[str, Any],
+        config_asset_params: dict[str, Any],
         candles: list,
     ) -> None:
         """Calculates order details and places a new buy order."""
@@ -467,9 +485,11 @@ class TradeManager:
                         asset_id, {"open_buy_order": {"order_id": order_id}}
                     )
                 else:
-                    self.logger.error(
-                        f"[{asset_id}] Order placed successfully but no order_id returned from exchange."
+                    log_message = (
+                        f"[{asset_id}] Order placed successfully but no "
+                        "order_id returned from exchange."
                     )
+                    self.logger.error(log_message)
             elif order_result:
                 error_response = order_result.get("error_response", {})
                 error_message = error_response.get("message", "No message")
