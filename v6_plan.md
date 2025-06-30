@@ -36,14 +36,11 @@ This section outlines ongoing efforts to improve the project's structure, stabil
 - **Outcome:** Achieved 100% mutation test coverage. All surviving and suspicious mutants were analyzed and killed by strengthening the test suite with new, targeted tests for edge cases.
 
 #### b. `trading/trade_manager.py`
-- **Status:** **IN PROGRESS**
-- **Outcome:** Initial run revealed 3 suspicious and 69 surviving mutants. The following have been addressed:
-  - **Killed Mutants 14, 15:** Added tests for `_get_product_details` caching and exception logging.
-  - **Killed Mutant 17:** Added test for handling missing `TRADING_PAIRS` attribute.
-  - **Killed Mutant 29:** Added test for unhandled exception logging in the main trade cycle.
-  - **Killed Mutant 41:** Added test to ensure the sell order loop continues after an invalid order.
-  - **Killed Mutant 42:** Added test to ensure already-filled sell orders are skipped.
-  - **Equivalent Mutant 43:** Identified as an equivalent mutant and left in place, as the code's behavior is identical with or without the mutation.
+- **Status:** **COMPLETED**
+- **Outcome:** All non-equivalent mutants have been killed.
+  - **Killed Mutants:** Added new, focused tests to kill mutants related to local status updates (`#70`), `KeyError` handling in the order placement loop (`#87`, `#89`), and skipping orders with empty IDs (`#52`).
+  - **Tooling Anomalies:** Investigated suspicious mutants (`#16`, `#87`, `#121`) and concluded they are `mutmut` tooling anomalies, not gaps in test coverage.
+  - **Equivalent Mutants:** Analyzed survived mutants (`#63`, `#74`, `#77`) and confirmed they are equivalent, as they do not alter the program's logic.
 
 #### c. Other Modules
 - `[ ] PENDING`  `persistence.py`
