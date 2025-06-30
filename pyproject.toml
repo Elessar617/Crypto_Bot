@@ -13,3 +13,7 @@ include = ["trading*"]
 
 [tool.bandit]
 skips = ["B101"]
+
+[tool.mutmut]
+runner = "pytest -x"
+tests_dir = "tests/"
