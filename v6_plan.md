@@ -47,8 +47,15 @@ This section outlines ongoing efforts to improve the project's structure, stabil
 - **Outcome:** All surviving mutants have been killed, achieving 100% mutation test coverage. All mutation-specific tests have been merged into the main test file, and the temporary test file has been deleted.
   - **Killed Mutants:** Added new tests to target surviving mutants, including tests for input validation, exception logging, and content validation for saved filled buy trades.
 
-#### d. Other Modules
-- `[ ] PENDING`  `order_calculator.py`
+#### d. `trading/order_calculator.py`
+- **Status:** **COMPLETED**
+- **Outcome:** Completed a full technical debt cleanup.
+  - **Static Analysis:** Ran `mypy`, `black`, `flake8`, and `bandit` to identify and fix all style, type, and security issues.
+  - **Refactoring:** Removed duplicate test methods, unused imports, and resolved all line-length violations to improve code quality and maintainability.
+  - **Verification:** Confirmed no regressions were introduced by running the full `pytest` suite. All 299 tests pass.
+  - **Mutation Testing:** All mutants have been killed, achieving 100% mutation test coverage.
+
+#### e. Other Modules
 - `[ ] PENDING`  `signal_analyzer.py`
 - `[ ] PENDING`  `technical_analysis.py`
 
