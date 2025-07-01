@@ -495,8 +495,6 @@ class TestPersistenceManager(unittest.TestCase):
         mock_save_trade_state.assert_not_called()
 
 
-
-
 @pytest.fixture
 def persistence_manager(tmp_path):
     """Provides a PersistenceManager instance with a temporary directory."""
@@ -506,7 +504,9 @@ def persistence_manager(tmp_path):
 
 def test_save_trade_state_empty_asset_id_raises_error(persistence_manager):
     """Kill mutant #3 & #4: Test that an empty asset_id raises an AssertionError."""
-    with pytest.raises(AssertionError, match=r"^asset_id must be a non-empty string\.$"):
+    with pytest.raises(
+        AssertionError, match=r"^asset_id must be a non-empty string\.$"
+    ):
         persistence_manager.save_trade_state("", {"key": "value"})
 
 
@@ -561,7 +561,9 @@ def test_save_trade_state_type_error_logs_traceback(persistence_manager):
 
 def test_load_trade_state_empty_asset_id_raises_error(persistence_manager):
     """Kill mutants #16 & #17: Test that an empty asset_id raises an AssertionError."""
-    with pytest.raises(AssertionError, match=r"^asset_id must be a non-empty string\.$"):
+    with pytest.raises(
+        AssertionError, match=r"^asset_id must be a non-empty string\.$"
+    ):
         persistence_manager.load_trade_state("")
 
 
@@ -597,7 +599,7 @@ def test_load_trade_state_io_error_logs_traceback(persistence_manager):
 
 
 def test_save_filled_buy_trade_verifies_data_structure(persistence_manager):
-    """Kill mutants #46-53: Test that save_filled_buy_trade saves the correct data structure."""
+    """Test that save_filled_buy_trade saves the correct data structure."""
     asset_id = "BTC-USD"
     buy_order_id = "buy123"
     filled_order = {
@@ -638,7 +640,9 @@ def test_add_sell_order_to_mismatched_buy_trade_logs_error(persistence_manager):
         }
     }
 
-    with patch.object(persistence_manager, "load_trade_state", return_value=initial_state):
+    with patch.object(
+        persistence_manager, "load_trade_state", return_value=initial_state
+    ):
         with patch.object(persistence_manager, "save_trade_state") as mock_save:
             with pytest.raises(ValueError):
                 persistence_manager.add_sell_order_to_filled_trade(
@@ -691,11 +695,15 @@ def test_update_sell_order_status_not_found_returns_false(persistence_manager):
     initial_state = {
         "filled_buy_trade": {
             "buy_order_id": buy_order_id,
-            "associated_sell_orders": [{"order_id": existing_sell_id, "status": "open"}],
+            "associated_sell_orders": [
+                {"order_id": existing_sell_id, "status": "open"}
+            ],
         }
     }
 
-    with patch.object(persistence_manager, "load_trade_state", return_value=initial_state):
+    with patch.object(
+        persistence_manager, "load_trade_state", return_value=initial_state
+    ):
         with patch.object(persistence_manager, "save_trade_state") as mock_save:
             result = persistence_manager.update_sell_order_status_in_filled_trade(
                 asset_id, buy_order_id, non_existent_sell_id, "filled"
@@ -703,9 +711,11 @@ def test_update_sell_order_status_not_found_returns_false(persistence_manager):
 
             assert result is False
             mock_save.assert_not_called()
-            persistence_manager.logger.warning.assert_called_with(
-                f"Sell order {non_existent_sell_id} not found for {asset_id} to update status."
+            expected_warning = (
+                f"Sell order {non_existent_sell_id} not found for {asset_id} "
+                "to update status."
             )
+            persistence_manager.logger.warning.assert_called_with(expected_warning)
 
 
 def test_update_sell_order_stops_after_found(persistence_manager):
@@ -724,14 +734,18 @@ def test_update_sell_order_stops_after_found(persistence_manager):
         }
     }
 
-    with patch.object(persistence_manager, "load_trade_state", return_value=initial_state):
+    with patch.object(
+        persistence_manager, "load_trade_state", return_value=initial_state
+    ):
         with patch.object(persistence_manager, "save_trade_state") as mock_save:
             try:
                 result = persistence_manager.update_sell_order_status_in_filled_trade(
                     asset_id, buy_order_id, sell_order_id_to_update, "filled"
                 )
             except AttributeError:
-                pytest.fail("AttributeError was raised, indicating the loop did not break.")
+                pytest.fail(
+                    "AttributeError was raised, indicating the loop did not break."
+                )
 
             assert result is True
             mock_save.assert_called_once()

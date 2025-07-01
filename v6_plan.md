@@ -55,6 +55,8 @@ This section outlines ongoing efforts to improve the project's structure, stabil
 ### 2. Code Cleanup & Logging Enhancements
 - **Status:** **Ongoing**
 - **Latest Changes:**
+  - Resolved all `flake8` line-length errors in `tests/test_persistence.py`.
+  - Configured `bandit` to ignore `B101` (assert_used) to align with project standards, resolving all security warnings.
   - Added an `INFO` level log for the raw API response in `get_public_candles` to improve debugging visibility.
   - Removed a stray `print` statement from the error handling block in `get_public_candles`.
 
