@@ -3,7 +3,7 @@ from __future__ import annotations
 """Module for performing financial calculations for trading."""
 
 import logging
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ConversionSyntax, InvalidOperation, ROUND_DOWN
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -17,19 +17,28 @@ def calculate_buy_order_details(
     Calculates the size and price for a new buy order based on constraints.
 
     Args:
-        buy_amount_usd: The amount in USD to spend.
-        last_close_price: The last closing price of the asset.
-        product_details: Dict with product constraints (increments, min size).
-        logger: Logger instance.
+        buy_amount_usd (Decimal): The amount in USD to buy.
+        last_close_price (Decimal): The last closing price of the asset.
+        product_details (Dict[str, Any]): A dictionary containing product details
+            such as 'base_increment', 'quote_increment', and 'base_min_size'.
+        logger (logging.Logger): The logger instance.
 
     Returns:
-        A tuple of (size, price) as Decimals, or None if calculation fails.
+        Optional[Tuple[Decimal, Decimal]]: A tuple containing the calculated
+        order size and limit price, or None if the calculation fails.
     """
+    asset_id = product_details.get("product_id", "UNKNOWN_ASSET")
     try:
-        base_increment = Decimal(str(product_details["base_increment"]))
-        quote_increment = Decimal(str(product_details["quote_increment"]))
-        base_min_size = Decimal(str(product_details["base_min_size"]))
-        asset_id = product_details.get("product_id", "UNKNOWN_ASSET")
+        try:
+            # Attempt to convert product details to Decimal
+            base_increment = Decimal(str(product_details["base_increment"]))
+            quote_increment = Decimal(str(product_details["quote_increment"]))
+            base_min_size = Decimal(str(product_details["base_min_size"]))
+        except (TypeError, InvalidOperation) as e:
+            logger.error(
+                f"[{asset_id}] Invalid numeric value in product_details: {e}", exc_info=True
+            )
+            return None
 
         # Round the price for the order to the nearest quote increment
         limit_price = _round_decimal(last_close_price, quote_increment)
@@ -50,11 +59,12 @@ def calculate_buy_order_details(
         return size, limit_price
 
     except KeyError as e:
-        logger.error(f"[{asset_id}] Missing key in product_details: {e}", exc_info=True)
+        logger.error(f"[{asset_id}] Missing required key in product_details: {e}")
         return None
+
     except Exception as e:
         logger.error(
-            f"[{asset_id}] Exception calculating buy order details: {e}", exc_info=True
+            f"Exception calculating buy order details for {asset_id}: {e}", exc_info=True
         )
         return None
 
@@ -68,9 +78,23 @@ def _round_decimal(d: Decimal, increment: Decimal) -> Decimal:
     return (d / increment).quantize(Decimal("1"), rounding=ROUND_DOWN) * increment
 
 
+def _calculate_tier_price_and_size(
+    buy_price: Decimal,
+    quantity: Decimal,
+    profit_target: Decimal,
+    quote_increment: Decimal,
+    base_increment: Decimal,
+) -> Tuple[Decimal, Decimal]:
+    """Calculates the rounded price and size for a single sell tier."""
+    sell_price_unrounded = buy_price * (Decimal("1") + profit_target)
+    sell_price_rounded = _round_decimal(sell_price_unrounded, quote_increment)
+    quantity_to_sell_rounded = _round_decimal(quantity, base_increment)
+    return quantity_to_sell_rounded, sell_price_rounded
+
+
 def determine_sell_orders_params(
-    buy_price: float,
-    buy_quantity: float,
+    buy_price: Decimal,
+    buy_quantity: Decimal,
     product_details: Dict[str, Any],
     config_asset_params: Dict[str, Any],
     logger: logging.Logger,
@@ -78,118 +102,97 @@ def determine_sell_orders_params(
     """
     Calculates parameters for tiered sell orders based on profit targets and product
     constraints.
-
-    Args:
-        buy_price: The price at which the asset was bought.
-        buy_quantity: The total quantity of the asset bought.
-        product_details: A dictionary containing details about the trading product,
-                         including 'quote_increment', 'base_increment', and
-                         'base_min_size'.
-        config_asset_params: A dictionary of configuration parameters for the asset,
-                             including 'sell_profit_tiers'.
-        logger: Logger instance for logging messages.
-
-    Returns:
-        A list of dictionaries, where each dictionary represents a sell order and
-        contains 'price' and 'size' as strings. Orders that do not meet the
-        'base_min_size' after adjustment are omitted.
     """
-    # --- Input Assertions ---
-    assert buy_price > 0, "Buy price must be positive."
-    assert buy_quantity > 0, "Buy quantity must be positive."
-    assert (
-        "quote_increment" in product_details
-    ), "'quote_increment' missing from product_details."
-    assert (
-        "base_increment" in product_details
-    ), "'base_increment' missing from product_details."
-    assert (
-        "base_min_size" in product_details
-    ), "'base_min_size' missing from product_details."
-    assert (
-        "sell_profit_tiers" in config_asset_params
-    ), "'sell_profit_tiers' missing from config_asset_params."
-
-    # --- Initialization ---
     asset_id = product_details.get("product_id", "UNKNOWN_ASSET")
-    sell_profit_tiers = config_asset_params["sell_profit_tiers"]
-    quote_increment = Decimal(str(product_details["quote_increment"]))
-    base_increment = Decimal(str(product_details["base_increment"]))
-    base_min_size = Decimal(str(product_details["base_min_size"]))
-    total_quantity_to_sell = Decimal(str(buy_quantity))
-    remaining_quantity = total_quantity_to_sell
-    sell_order_params = []
+    try:
+        # --- Input & Config Validation ---
+        assert buy_price > 0, "Buy price must be positive."
+        assert buy_quantity > 0, "Buy quantity must be positive."
 
-    # --- Tiered Order Calculation ---
-    for i, tier in enumerate(sell_profit_tiers):
-        is_last_tier = i == len(sell_profit_tiers) - 1
-        profit_target = tier["profit_target"]
-        quantity_percentage = tier["quantity_percentage"]
+        sell_profit_tiers = config_asset_params["sell_profit_tiers"]
 
-        assert 0 < profit_target, f"Tier {i+1} profit target must be positive."
-        assert (
-            0 < quantity_percentage <= 1
-        ), f"Tier {i+1} quantity percentage must be between 0 and 1."
+        # --- Tier Config Validation ---
+        for i, tier in enumerate(sell_profit_tiers):
+            profit_target = Decimal(str(tier["profit_target"]))
+            quantity_percentage = Decimal(str(tier["quantity_percentage"]))
+            assert 0 < profit_target, f"Tier {i+1} profit target must be positive."
+            assert (
+                0 < quantity_percentage <= 1
+            ), f"Tier {i+1} quantity percentage must be between 0 and 1."
 
-        # Calculate sell price
-        sell_price_unrounded = Decimal(str(buy_price)) * (
-            Decimal("1") + Decimal(str(profit_target))
-        )
-        sell_price_rounded = _round_decimal(sell_price_unrounded, quote_increment)
+        # --- Main Calculation ---
+        quote_increment = Decimal(str(product_details["quote_increment"]))
+        base_increment = Decimal(str(product_details["base_increment"]))
+        base_min_size = Decimal(str(product_details["base_min_size"]))
 
-        # Calculate sell quantity
-        if is_last_tier:
-            # Assign all remaining quantity to the last tier to avoid rounding leftovers
-            quantity_to_sell_unrounded = remaining_quantity
+        total_quantity_to_sell = buy_quantity
+        remaining_quantity = total_quantity_to_sell
+        sell_order_params = []
+
+        for i, tier in enumerate(sell_profit_tiers):
+            is_last_tier = i == len(sell_profit_tiers) - 1
+
+            profit_target = Decimal(str(tier["profit_target"]))
+            quantity_percentage = Decimal(str(tier["quantity_percentage"]))
+
+            if is_last_tier:
+                quantity_to_sell_unrounded = remaining_quantity
+            else:
+                quantity_to_sell_unrounded = (
+                    total_quantity_to_sell * quantity_percentage
+                )
+
+            (
+                quantity_to_sell_rounded,
+                sell_price_rounded,
+            ) = _calculate_tier_price_and_size(
+                buy_price,
+                quantity_to_sell_unrounded,
+                profit_target,
+                quote_increment,
+                base_increment,
+            )
+
+            if quantity_to_sell_rounded <= 0:
+                logger.warning(
+                    f"[{asset_id}] Tier {i+1} sell quantity is zero. Skipping."
+                )
+                continue
+
+            if quantity_to_sell_rounded < base_min_size:
+                logger.info(
+                    f"[{asset_id}] Skipping tier {i+1} because its size is below min",
+                    extra={
+                        "tier": i + 1,
+                        "calculated_size": str(quantity_to_sell_rounded),
+                        "min_size": str(base_min_size),
+                    },
+                )
+                continue
+
+            remaining_quantity -= quantity_to_sell_rounded
+            sell_order_params.append(
+                {
+                    "price": f"{sell_price_rounded}",
+                    "size": f"{quantity_to_sell_rounded}",
+                }
+            )
+
+        return sell_order_params
+
+    except KeyError as e:
+        # Distinguish between an expected missing config and an unexpected one.
+        if "sell_profit_tiers" in str(e):
+            logger.error(f"[{asset_id}] 'sell_profit_tiers' not found in config_asset_params.")
         else:
-            quantity_to_sell_unrounded = total_quantity_to_sell * Decimal(
-                str(quantity_percentage)
-            )
-
-        quantity_to_sell_rounded = _round_decimal(
-            quantity_to_sell_unrounded, base_increment
-        )
-
-        # --- Validation and Adjustment ---
-        if quantity_to_sell_rounded <= 0:
-            logger.warning(
-                f"[{asset_id}] Tier {i+1} sell quantity is zero after rounding. "
-                f"Skipping."
-            )
-            continue
-
-        if quantity_to_sell_rounded < base_min_size:
-            logger.warning(
-                f"[{asset_id}] Tier {i+1} quantity {quantity_to_sell_rounded} is below "
-                f"min size {base_min_size}. Skipping."
-            )
-            continue
-
-        # Update remaining quantity
-        remaining_quantity -= quantity_to_sell_rounded
-        if (
-            remaining_quantity < -base_increment
-        ):  # Allow for small floating point inaccuracies
-            log_message = (
-                f"[{asset_id}] Negative remaining quantity ({remaining_quantity}) "
-                f"after tier {i+1}. This should not happen."
-            )
-            logger.error(log_message)
-            # This indicates a logic error, stop processing to be safe
-            return []
-
-        sell_order_params.append(
-            {
-                "price": f"{sell_price_rounded}",
-                "size": f"{quantity_to_sell_rounded}",
-            }
-        )
-
-    # --- Final Check ---
-    if remaining_quantity > base_min_size:
-        logger.warning(
-            f"[{asset_id}] {remaining_quantity} of asset remains unsold after "
-            f"tiering logic due to rounding."
-        )
-
-    return sell_order_params
+            logger.error(f"[{asset_id}] Missing key in config or product details: {e}", exc_info=True)
+        return []
+    except (TypeError, InvalidOperation, AssertionError) as e:
+        logger.error(f"[{asset_id}] Invalid value for sell calc: {e}", exc_info=True)
+        return []
+    except AttributeError as e:
+        logger.error(f"[{asset_id}] Attribute error in sell calc: {e}", exc_info=True)
+        return []
+    except Exception as e:
+        logger.error(f"[{asset_id}] Unexpected exception in sell calc: {e}", exc_info=True)
+        return []
