@@ -15,5 +15,6 @@ include = ["trading*"]
 skips = ["B101"]
 
 [tool.mutmut]
+paths_to_mutate = "trading"
 runner = "pytest -x"
 tests_dir = "tests/"
