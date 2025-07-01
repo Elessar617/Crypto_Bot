@@ -47,15 +47,18 @@ class TestSignalAnalyzer(unittest.TestCase):
             should_buy_asset(rsi_series, self.config_params, self.mock_logger)
         )
 
-    def test_should_buy_asset_false_on_rsi_equals_threshold(self):
-        """Test returns False on edge cases where RSI equals the threshold."""
-        rsi_series_1 = pd.Series([25, 30])  # Current equals threshold
+    def test_should_buy_asset_false_when_current_rsi_equals_threshold(self):
+        """Test returns False when the current RSI equals the threshold."""
+        rsi_series = pd.Series([25, 30])  # Current RSI equals threshold
         self.assertFalse(
-            should_buy_asset(rsi_series_1, self.config_params, self.mock_logger)
+            should_buy_asset(rsi_series, self.config_params, self.mock_logger)
         )
-        rsi_series_2 = pd.Series([30, 35])  # Previous equals threshold
+
+    def test_should_buy_asset_false_when_previous_rsi_equals_threshold(self):
+        """Test returns False when the previous RSI equals the threshold."""
+        rsi_series = pd.Series([30, 35])  # Previous RSI equals threshold
         self.assertFalse(
-            should_buy_asset(rsi_series_2, self.config_params, self.mock_logger)
+            should_buy_asset(rsi_series, self.config_params, self.mock_logger)
         )
 
     def test_input_validation_raises_assertion_error(self):
@@ -76,6 +79,39 @@ class TestSignalAnalyzer(unittest.TestCase):
             should_buy_asset(
                 pd.Series([10, 20]), {"rsi_oversold_threshold": 101}, self.mock_logger
             )
+
+        with self.assertRaises(AssertionError):
+            should_buy_asset(
+                pd.Series([10, 20]), {"rsi_oversold_threshold": 0}, self.mock_logger
+            )
+
+        with self.assertRaises(AssertionError):
+            should_buy_asset(
+                pd.Series([10, 20]), {"rsi_oversold_threshold": 100}, self.mock_logger
+            )
+
+    def test_threshold_at_lower_boundary_is_valid(self):
+        """Test does not raise an error for a valid threshold at the lower boundary."""
+        # This test kills a mutant changing `0 < threshold` to `1 < threshold`.
+        # The original code accepts threshold=1, but the mutant would reject it.
+        rsi_series = pd.Series([10, 20])  # Does not trigger a buy signal
+        config_params = {"rsi_oversold_threshold": 1}
+        try:
+            should_buy_asset(rsi_series, config_params, self.mock_logger)
+        except AssertionError:
+            self.fail(
+                "should_buy_asset() raised AssertionError for a valid threshold of 1."
+            )
+
+    def test_should_buy_asset_true_with_longer_rsi_series(self):
+        """Test returns True for a buy signal with more than two RSI values."""
+        # This test ensures that the logic correctly uses the last two points
+        # of a longer series, killing a mutant that changes iloc[-1] to iloc[1].
+        rsi_series = pd.Series([20, 25, 35])  # Previous below, current above
+        self.assertTrue(
+            should_buy_asset(rsi_series, self.config_params, self.mock_logger)
+        )
+        self.mock_logger.info.assert_called_once()
 
     def test_handles_non_numeric_rsi_values(self):
         """Test returns False for non-numeric RSI values."""

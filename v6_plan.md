@@ -55,9 +55,11 @@ This section outlines ongoing efforts to improve the project's structure, stabil
   - **Verification:** Confirmed no regressions were introduced by running the full `pytest` suite. All 299 tests pass.
   - **Mutation Testing:** All mutants have been killed, achieving 100% mutation test coverage.
 
-#### e. Other Modules
-- `[ ] PENDING`  `signal_analyzer.py`
-- `[ ] PENDING`  `technical_analysis.py`
+#### e. `trading/signal_analyzer.py`
+- **Status:** **IN PROGRESS**
+
+#### f. `trading/technical_analysis.py`
+- **Status:** **PENDING**
 
 ### 2. Code Cleanup & Logging Enhancements
 - **Status:** **Ongoing**
