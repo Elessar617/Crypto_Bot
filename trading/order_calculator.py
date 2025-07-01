@@ -3,7 +3,7 @@ from __future__ import annotations
 """Module for performing financial calculations for trading."""
 
 import logging
-from decimal import Decimal, ConversionSyntax, InvalidOperation, ROUND_DOWN
+from decimal import Decimal, InvalidOperation, ROUND_DOWN
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -36,7 +36,8 @@ def calculate_buy_order_details(
             base_min_size = Decimal(str(product_details["base_min_size"]))
         except (TypeError, InvalidOperation) as e:
             logger.error(
-                f"[{asset_id}] Invalid numeric value in product_details: {e}", exc_info=True
+                f"[{asset_id}] Invalid numeric value in product_details: {e}",
+                exc_info=True,
             )
             return None
 
@@ -64,7 +65,8 @@ def calculate_buy_order_details(
 
     except Exception as e:
         logger.error(
-            f"Exception calculating buy order details for {asset_id}: {e}", exc_info=True
+            f"Exception calculating buy order details for {asset_id}: {e}",
+            exc_info=True,
         )
         return None
 
@@ -183,9 +185,14 @@ def determine_sell_orders_params(
     except KeyError as e:
         # Distinguish between an expected missing config and an unexpected one.
         if "sell_profit_tiers" in str(e):
-            logger.error(f"[{asset_id}] 'sell_profit_tiers' not found in config_asset_params.")
+            logger.error(
+                f"[{asset_id}] 'sell_profit_tiers' not found in config_asset_params."
+            )
         else:
-            logger.error(f"[{asset_id}] Missing key in config or product details: {e}", exc_info=True)
+            logger.error(
+                f"[{asset_id}] Missing key in config or product details: {e}",
+                exc_info=True,
+            )
         return []
     except (TypeError, InvalidOperation, AssertionError) as e:
         logger.error(f"[{asset_id}] Invalid value for sell calc: {e}", exc_info=True)
@@ -194,5 +201,7 @@ def determine_sell_orders_params(
         logger.error(f"[{asset_id}] Attribute error in sell calc: {e}", exc_info=True)
         return []
     except Exception as e:
-        logger.error(f"[{asset_id}] Unexpected exception in sell calc: {e}", exc_info=True)
+        logger.error(
+            f"[{asset_id}] Unexpected exception in sell calc: {e}", exc_info=True
+        )
         return []

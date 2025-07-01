@@ -4,16 +4,22 @@ import decimal
 import logging
 import unittest
 from decimal import Decimal
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, Mock, call, patch
+
+from unittest.mock import MagicMock, Mock, patch
 
 from trading.order_calculator import (
-    determine_sell_orders_params, _round_decimal, _calculate_tier_price_and_size, calculate_buy_order_details
+    determine_sell_orders_params,
+    _round_decimal,
+    _calculate_tier_price_and_size,
+    calculate_buy_order_details,
 )
 
 
 class TestOrderCalculator(unittest.TestCase):
-    @patch('trading.order_calculator._calculate_tier_price_and_size', side_effect=Exception("Generic error for testing"))
+    @patch(
+        "trading.order_calculator._calculate_tier_price_and_size",
+        side_effect=Exception("Generic error for testing"),
+    )
     def test_generic_exception_logs_exc_info(self, mock_calculate):
         """Test that a generic exception logs exc_info=True, killing mutant #99."""
         result = determine_sell_orders_params(
@@ -47,8 +53,6 @@ class TestOrderCalculator(unittest.TestCase):
             ]
         }
 
-
-
     # --- Tests for _round_decimal ---
 
     def test_round_decimal_down(self):
@@ -71,9 +75,15 @@ class TestOrderCalculator(unittest.TestCase):
 
     def test_round_decimal(self):
         """Test rounding a Decimal to a specified increment."""
-        self.assertEqual(_round_decimal(Decimal("1.234"), Decimal("0.01")), Decimal("1.23"))
-        self.assertEqual(_round_decimal(Decimal("1.239"), Decimal("0.01")), Decimal("1.23"))
-        self.assertEqual(_round_decimal(Decimal("1.23"), Decimal("0.1")), Decimal("1.2"))
+        self.assertEqual(
+            _round_decimal(Decimal("1.234"), Decimal("0.01")), Decimal("1.23")
+        )
+        self.assertEqual(
+            _round_decimal(Decimal("1.239"), Decimal("0.01")), Decimal("1.23")
+        )
+        self.assertEqual(
+            _round_decimal(Decimal("1.23"), Decimal("0.1")), Decimal("1.2")
+        )
 
     def test_rounding_with_increment_of_one(self):
         """Test rounding with an increment of 1 to kill mutant #20."""
@@ -98,8 +108,6 @@ class TestOrderCalculator(unittest.TestCase):
             _round_decimal(Decimal("123.45"), Decimal("0.01")),
             Decimal("123.45"),
         )
-
-
 
     # --- Tests for determine_sell_orders_params ---
 
@@ -135,7 +143,7 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertDictEqual(params[1], expected_tier2)
 
     def test_last_tier_sells_remaining_quantity(self):
-        """Test that the last tier sells all remaining quantity, even with rounding, killing mutant #67."""
+        """Test last tier sells all remaining quantity, with rounding (mutant #67)."""
         # Use a quantity that will have a remainder after rounding
         buy_quantity = Decimal("1.0001")
         self.config_asset_params["sell_profit_tiers"] = [
@@ -163,7 +171,9 @@ class TestOrderCalculator(unittest.TestCase):
     def test_skips_tier_if_quantity_below_min_size(self):
         """Test tier is skipped if its quantity is below the minimum."""
         # Set a low quantity percentage to ensure the first tier is skipped
-        self.config_asset_params["sell_profit_tiers"][0]["quantity_percentage"] = 0.00001
+        self.config_asset_params["sell_profit_tiers"][0][
+            "quantity_percentage"
+        ] = 0.00001
 
         params = determine_sell_orders_params(
             Decimal("100.0"),
@@ -225,11 +235,17 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertEqual(params, [])
         self.mock_logger.error.assert_called_once()
         call_args, kwargs = self.mock_logger.error.call_args
-        self.assertIn("[UNKNOWN_ASSET] Missing key in config or product details: 'quote_increment'", call_args[0])
+        self.assertIn(
+            (
+                "[UNKNOWN_ASSET] Missing key in config or product details: "
+                "'quote_increment'"
+            ),
+            call_args[0],
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_returns_empty_if_all_tiers_below_min_size(self):
-        """Test returns an empty list and logs correctly if no tier meets the minimum size."""
+        """Test empty list is returned if all tiers are below minimum size."""
         self.product_details["base_min_size"] = "10.0"  # Set a high min size
         params = determine_sell_orders_params(
             Decimal("100.0"),
@@ -250,48 +266,75 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertEqual(extra_data.get("min_size"), "10.0")
 
     def test_skips_tier_if_quantity_is_zero(self):
-        """Test that tiers with a calculated quantity of zero are skipped, killing mutant #81."""
-        config = {"sell_profit_tiers": [{"profit_target": 0.01, "quantity_percentage": 1.0}]}
+        """Test that tiers with a zero quantity are skipped (mutant #81)."""
+        config = {
+            "sell_profit_tiers": [{"profit_target": 0.01, "quantity_percentage": 1.0}]
+        }
         params = determine_sell_orders_params(
-            Decimal("50000"), Decimal("1E-8"), self.product_details, config, self.mock_logger
+            Decimal("50000"),
+            Decimal("1E-8"),
+            self.product_details,
+            config,
+            self.mock_logger,
         )
         self.assertEqual(params, [])
-        self.mock_logger.warning.assert_called_once_with("[BTC-USD] Tier 1 sell quantity is zero. Skipping.")
+        self.mock_logger.warning.assert_called_once_with(
+            "[BTC-USD] Tier 1 sell quantity is zero. Skipping."
+        )
 
     def test_input_validation_assertions(self):
         """Test that assertions fire for invalid inputs, killing mutant #32."""
         # Test non-positive buy_price
         result = determine_sell_orders_params(
-            Decimal("0"), Decimal("1"), self.product_details, self.config_asset_params, self.mock_logger
+            Decimal("0"),
+            Decimal("1"),
+            self.product_details,
+            self.config_asset_params,
+            self.mock_logger,
         )
         self.assertEqual(result, [])
         self.mock_logger.error.assert_called_once()
         call_args, kwargs = self.mock_logger.error.call_args
-        self.assertIn("Invalid value for sell calc: Buy price must be positive.", call_args[0])
+        self.assertIn(
+            "Invalid value for sell calc: Buy price must be positive.", call_args[0]
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
         # Test non-positive buy_quantity
         self.mock_logger.reset_mock()
         result = determine_sell_orders_params(
-            Decimal("1"), Decimal("0"), self.product_details, self.config_asset_params, self.mock_logger
+            Decimal("1"),
+            Decimal("0"),
+            self.product_details,
+            self.config_asset_params,
+            self.mock_logger,
         )
         self.assertEqual(result, [])
         self.mock_logger.error.assert_called_once()
         call_args, kwargs = self.mock_logger.error.call_args
-        self.assertIn("Invalid value for sell calc: Buy quantity must be positive.", call_args[0])
+        self.assertIn(
+            "Invalid value for sell calc: Buy quantity must be positive.", call_args[0]
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_key_error_handling_in_product_details(self):
-        """Test graceful failure when product_details is missing a required key, killing mutant #57."""
+        """Test graceful failure on missing product_details key (mutant #57)."""
         bad_details = self.product_details.copy()
         del bad_details["quote_increment"]
         result = determine_sell_orders_params(
-            Decimal("100"), Decimal("1"), bad_details, self.config_asset_params, self.mock_logger
+            Decimal("100"),
+            Decimal("1"),
+            bad_details,
+            self.config_asset_params,
+            self.mock_logger,
         )
         self.assertEqual(result, [])
         self.mock_logger.error.assert_called_once()
         call_args, kwargs = self.mock_logger.error.call_args
-        self.assertIn("[BTC-USD] Missing key in config or product details: 'quote_increment'", call_args[0])
+        self.assertIn(
+            "[BTC-USD] Missing key in config or product details: 'quote_increment'",
+            call_args[0],
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_buy_price_le_one_is_valid(self):
@@ -311,7 +354,7 @@ class TestOrderCalculator(unittest.TestCase):
         self.mock_logger.error.assert_not_called()
 
     def test_non_positive_buy_price_raises_error(self):
-        """Test that a non-positive buy_price is handled gracefully, killing mutant #37."""
+        """Test non-positive buy_price is handled gracefully (mutant #37)."""
         result = determine_sell_orders_params(
             Decimal("0"),
             Decimal("1.0"),
@@ -322,7 +365,7 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertEqual(result, [])
         self.mock_logger.error.assert_called_once_with(
             "[BTC-USD] Invalid value for sell calc: Buy price must be positive.",
-            exc_info=True
+            exc_info=True,
         )
 
     def test_buy_price_of_one_is_valid(self):
@@ -340,7 +383,7 @@ class TestOrderCalculator(unittest.TestCase):
         self.mock_logger.error.assert_not_called()
 
     def test_non_positive_buy_quantity_raises_error(self):
-        """Test that a non-positive buy_quantity is handled gracefully, killing mutant #40."""
+        """Test non-positive buy_quantity is handled gracefully (mutant #40)."""
         result = determine_sell_orders_params(
             Decimal("100.0"),
             Decimal("0"),
@@ -408,7 +451,10 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertEqual(result, [])
         self.mock_logger.error.assert_called_once()
         call_args, kwargs = self.mock_logger.error.call_args
-        self.assertIn("Invalid value for sell calc: Tier 1 profit target must be positive.", call_args[0])
+        self.assertIn(
+            "Invalid value for sell calc: Tier 1 profit target must be positive.",
+            call_args[0],
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_zero_quantity_percentage_raises_error(self):
@@ -429,7 +475,13 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertEqual(result, [])
         self.mock_logger.error.assert_called_once()
         call_args, kwargs = self.mock_logger.error.call_args
-        self.assertIn("Invalid value for sell calc: Tier 1 quantity percentage must be between 0 and 1.", call_args[0])
+        self.assertIn(
+            (
+                "Invalid value for sell calc: "
+                "Tier 1 quantity percentage must be between 0 and 1."
+            ),
+            call_args[0],
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_quantity_percentage_of_one_is_valid(self):
@@ -463,7 +515,10 @@ class TestOrderCalculator(unittest.TestCase):
             self.mock_logger,
         )
         self.assertEqual(result, [])
-        expected_error_msg = "[BTC-USD] Invalid value for sell calc: Tier 1 quantity percentage must be between 0 and 1."
+        expected_error_msg = (
+            "[BTC-USD] Invalid value for sell calc: "
+            "Tier 1 quantity percentage must be between 0 and 1."
+        )
         self.mock_logger.error.assert_called_once_with(
             expected_error_msg, exc_info=True
         )
@@ -497,7 +552,7 @@ class TestOrderCalculator(unittest.TestCase):
 
     def test_assertion_error_in_product_details_logs_correctly(self):
         """Test that an assertion error in product details is logged correctly."""
-        # Force an exception by providing an invalid 'base_increment' that causes an assertion
+        # Force an exception by providing an invalid 'base_increment' for an assertion
         product_details = self.product_details.copy()
         product_details["base_increment"] = "0"
 
@@ -573,7 +628,7 @@ class TestOrderCalculator(unittest.TestCase):
         )
 
     def test_invalid_profit_target_in_tiers_is_handled_gracefully(self):
-        """Test that an invalid profit target in a tier is handled gracefully, killing mutant #49."""
+        """Test invalid profit target in a tier is handled gracefully (mutant #49)."""
         config_asset_params = self.config_asset_params.copy()
         # Make the second tier invalid
         config_asset_params["sell_profit_tiers"] = [
@@ -592,7 +647,10 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertEqual(result, [])
         self.mock_logger.error.assert_called_once()
         call_args, kwargs = self.mock_logger.error.call_args
-        self.assertIn("Invalid value for sell calc: Tier 2 profit target must be positive.", call_args[0])
+        self.assertIn(
+            "Invalid value for sell calc: Tier 2 profit target must be positive.",
+            call_args[0],
+        )
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_type_error_on_invalid_profit_target(self):
@@ -616,19 +674,19 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_continue_on_zero_quantity_tier(self):
-        """Test that the loop continues to the next tier if one tier has zero quantity."""
-        # This test is designed to kill mutant #82, where a `continue` is changed to a `break`.
-        # We need a tier that passes validation but results in a quantity that rounds to zero.
+        """Test loop continues if a tier has zero quantity (mutant #82)."""
+        # A tier must pass validation but result in a quantity that rounds to zero,
+        # ensuring the loop continues to the next tier instead of breaking.
         test_config = {
             "sell_profit_tiers": [
                 {
                     "profit_target": "0.01",
-                    # This percentage is > 0 but will result in a quantity that rounds to 0
+                    # This percentage > 0 will result in a quantity that rounds to 0.
                     "quantity_percentage": "0.000000001",
                 },
                 {
                     "profit_target": "0.02",
-                    "quantity_percentage": "1.0",  # This tier should still be processed
+                    "quantity_percentage": "1.0",  # This tier is processed.
                 },
             ]
         }
@@ -653,7 +711,10 @@ class TestOrderCalculator(unittest.TestCase):
 
     def test_internal_type_error_is_handled(self):
         """Test that a TypeError from internal calculations is handled."""
-        with patch("trading.order_calculator._round_decimal", side_effect=TypeError("mocked error")):
+        with patch(
+            "trading.order_calculator._round_decimal",
+            side_effect=TypeError("mocked error"),
+        ):
             params = determine_sell_orders_params(
                 Decimal("100.0"),
                 Decimal("1.0"),
@@ -670,7 +731,7 @@ class TestOrderCalculator(unittest.TestCase):
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_sell_quantity_of_one_is_valid(self):
-        """Test that a calculated sell quantity of 1 is processed correctly, killing mutant #79."""
+        """Test a sell quantity of 1 is processed correctly (mutant #79)."""
         product_details = self.product_details.copy()
         product_details["base_increment"] = "1"
 
@@ -693,13 +754,13 @@ class TestOrderCalculator(unittest.TestCase):
         self.mock_logger.warning.assert_not_called()
 
     def test_last_tier_uses_remaining_quantity(self):
-        """Test that the last tier correctly uses the remaining quantity, killing mutant #74."""
+        """Test last tier uses remaining quantity (mutant #74)."""
         config_asset_params = {
             "sell_profit_tiers": [
                 {"profit_target": "0.01", "quantity_percentage": "0.3"},
                 {"profit_target": "0.02", "quantity_percentage": "0.3"},
-                # Last tier should use remaining quantity. The quantity_percentage is
-                # required for validation but ignored for the final tier's size calculation.
+                # The last tier uses the remaining quantity. Its `quantity_percentage`
+                # is for validation only; it's ignored for the size calculation.
                 {"profit_target": "0.03", "quantity_percentage": "0.4"},
             ]
         }
@@ -714,17 +775,20 @@ class TestOrderCalculator(unittest.TestCase):
 
         self.assertEqual(len(params), 3)
         self.mock_logger.error.assert_not_called()
-        tier1_qty = Decimal(params[0]['size'])
-        tier2_qty = Decimal(params[1]['size'])
-        tier3_qty = Decimal(params[2]['size'])
+        tier1_qty = Decimal(params[0]["size"])
+        tier2_qty = Decimal(params[1]["size"])
+        tier3_qty = Decimal(params[2]["size"])
         self.assertEqual(tier1_qty, Decimal("0.3"))
         self.assertEqual(tier2_qty, Decimal("0.3"))
         self.assertEqual(tier3_qty, Decimal("0.4"))
         self.assertEqual(tier1_qty + tier2_qty + tier3_qty, Decimal("1.0"))
 
     def test_attribute_error_in_sell_calc_logs_exc_info(self):
-        """Test that an AttributeError in sell calc logs exc_info, killing mutant #97."""
-        with patch('trading.order_calculator._calculate_tier_price_and_size', side_effect=AttributeError("mock attribute error")):
+        """Test AttributeError in sell calc logs exc_info (mutant #97)."""
+        with patch(
+            "trading.order_calculator._calculate_tier_price_and_size",
+            side_effect=AttributeError("mock attribute error"),
+        ):
             result = determine_sell_orders_params(
                 Decimal("100.0"),
                 Decimal("1.0"),
@@ -739,8 +803,11 @@ class TestOrderCalculator(unittest.TestCase):
             self.assertTrue(kwargs.get("exc_info"))
 
     def test_unexpected_exception_in_sell_calc_logs_exc_info(self):
-        """Test that a generic Exception in sell calc logs exc_info, killing mutant #98."""
-        with patch('trading.order_calculator._calculate_tier_price_and_size', side_effect=Exception("mock unexpected error")):
+        """Test generic Exception in sell calc logs exc_info (mutant #98)."""
+        with patch(
+            "trading.order_calculator._calculate_tier_price_and_size",
+            side_effect=Exception("mock unexpected error"),
+        ):
             result = determine_sell_orders_params(
                 Decimal("100.0"),
                 Decimal("1.0"),
@@ -766,7 +833,7 @@ class TestOrderCalculator(unittest.TestCase):
                 raise decimal.InvalidOperation("Mocked invalid operation for '1'")
             return original_decimal_constructor(value, *args, **kwargs)
 
-        with patch('trading.order_calculator.Decimal', side_effect=mock_decimal):
+        with patch("trading.order_calculator.Decimal", side_effect=mock_decimal):
             result = determine_sell_orders_params(
                 Decimal("100.0"),
                 Decimal("1.0"),
@@ -779,13 +846,18 @@ class TestOrderCalculator(unittest.TestCase):
             call_args, kwargs = self.mock_logger.error.call_args
             self.assertEqual(
                 call_args[0],
-                "[BTC-USD] Invalid value for sell calc: Mocked invalid operation for '1'"
+                (
+                    "[BTC-USD] Invalid value for sell calc: "
+                    "Mocked invalid operation for '1'"
+                ),
             )
             self.assertTrue(kwargs.get("exc_info"))
 
     def test_invalid_quantity_percentage_in_tier(self):
-        """Test that an invalid quantity_percentage in a tier is handled, killing mutant #46."""
-        self.config_asset_params["sell_profit_tiers"][0]["quantity_percentage"] = "not-a-decimal"
+        """Test invalid quantity_percentage in a tier is handled (mutant #46)."""
+        self.config_asset_params["sell_profit_tiers"][0][
+            "quantity_percentage"
+        ] = "not-a-decimal"
 
         result = determine_sell_orders_params(
             Decimal("100.0"),
@@ -865,26 +937,6 @@ class TestPrivateHelpers(unittest.TestCase):
 
 
 class TestCalculateBuyOrderDetails(unittest.TestCase):
-    def test_limit_price_rounds_to_zero(self):
-        """Test that a price rounding to zero is handled correctly."""
-        mock_logger = MagicMock(spec=logging.Logger)
-        product_details = {
-            "product_id": "BTC-USD",
-            "base_increment": "0.00000001",
-            "quote_increment": "0.01",
-            "base_min_size": "0.0001",
-        }
-        # This price will round to 0.00 with a quote_increment of 0.01
-        last_close_price = Decimal("0.004")
-
-        result = calculate_buy_order_details(
-            Decimal("10"), last_close_price, product_details, mock_logger
-        )
-
-        self.assertIsNone(result)
-        mock_logger.error.assert_called_once_with(
-            "[BTC-USD] Calculated limit price is zero or negative."
-        )
     def test_successful_calculation(self):
         """Test a successful buy order calculation."""
         result = calculate_buy_order_details(
@@ -936,23 +988,6 @@ class TestCalculateBuyOrderDetails(unittest.TestCase):
         self.mock_logger.error.assert_called_once_with(
             "[BTC-USD] Calculated limit price is zero or negative."
         )
-
-    def test_limit_price_of_one_is_valid(self):
-        """Test that a calculated limit price of 1 is valid to kill mutant #12."""
-        # This test ensures that a limit_price of 1 is valid, which will fail
-        # the mutated assertion `limit_price <= 1`.
-        product_details = self.product_details.copy()
-        product_details["quote_increment"] = "0.01"
-
-        result = calculate_buy_order_details(
-            Decimal("100"),
-            Decimal("1.004"),
-            product_details,
-            self.mock_logger,
-        )
-
-        self.assertIsNotNone(result)
-        self.mock_logger.error.assert_not_called()
 
     @patch("trading.order_calculator._round_decimal")
     def test_calculate_buy_order_details_generic_exception(self, mock_round_decimal):
@@ -1059,7 +1094,9 @@ class TestCalculateBuyOrderDetails(unittest.TestCase):
         self.assertIsNone(result)
         self.mock_logger.error.assert_called_once()
         call_args, _ = self.mock_logger.error.call_args
-        self.assertIn("Missing required key in product_details: 'base_increment'", call_args[0])
+        self.assertIn(
+            "Missing required key in product_details: 'base_increment'", call_args[0]
+        )
 
     def test_key_error_on_base_min_size(self):
         """Test that a KeyError on 'base_min_size' is handled."""
@@ -1076,7 +1113,10 @@ class TestCalculateBuyOrderDetails(unittest.TestCase):
         self.assertIsNone(result)
         self.mock_logger.error.assert_called_once()
         call_args, _ = self.mock_logger.error.call_args
-        self.assertEqual("[BTC-USD] Missing required key in product_details: 'base_min_size'", call_args[0])
+        self.assertEqual(
+            "[BTC-USD] Missing required key in product_details: 'base_min_size'",
+            call_args[0],
+        )
 
     def test_invalid_quote_increment_is_handled(self):
         """Test that an invalid quote_increment is handled gracefully."""
@@ -1097,7 +1137,7 @@ class TestCalculateBuyOrderDetails(unittest.TestCase):
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_limit_price_rounds_to_zero(self):
-        """Test that a limit_price that rounds to zero is handled, killing mutants #11 and #12."""
+        """Test a limit_price that rounds to zero is handled (mutants #11, #12)."""
         mock_logger = MagicMock(spec=logging.Logger)
         product_details = {
             "product_id": "BTC-USD",
@@ -1145,12 +1185,15 @@ class TestCalculateBuyOrderDetails(unittest.TestCase):
         self.assertTrue(kwargs.get("exc_info"))
 
     def test_missing_product_id_logs_default_asset(self):
-        """Test that the default asset ID is logged when product_id is missing, killing mutant #8."""
+        """Test default asset ID is logged if product_id is missing (mutant #8)."""
         details_without_id = self.product_details.copy()
         del details_without_id["product_id"]
         del details_without_id["base_increment"]
         result = calculate_buy_order_details(
-            self.buy_amount_usd, self.last_close_price, details_without_id, self.mock_logger
+            self.buy_amount_usd,
+            self.last_close_price,
+            details_without_id,
+            self.mock_logger,
         )
         self.assertIsNone(result)
         self.mock_logger.error.assert_called_once_with(
