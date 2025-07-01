@@ -47,8 +47,11 @@ This section outlines ongoing efforts to improve the project's structure, stabil
 - **Outcome:** All surviving mutants have been killed, achieving 100% mutation test coverage. All mutation-specific tests have been merged into the main test file, and the temporary test file has been deleted.
   - **Killed Mutants:** Added new tests to target surviving mutants, including tests for input validation, exception logging, and content validation for saved filled buy trades.
 
-#### d. Other Modules
-- `[ ] PENDING`  `order_calculator.py`
+#### d. `trading/order_calculator.py`
+- **Status:** **COMPLETED**
+- **Outcome:** Achieved 100% mutation test coverage. All 101 mutants were killed after a multi-step process of strengthening tests for assertion messages, boundary conditions, and `KeyError` handling. Ambiguous "happy path" tests were removed in favor of surgically precise tests to provide clean failure signals to `mutmut`.
+
+#### e. Other Modules
 - `[ ] PENDING`  `signal_analyzer.py`
 - `[ ] PENDING`  `technical_analysis.py`
 
