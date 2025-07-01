@@ -92,6 +92,53 @@ class TestTechnicalAnalysis(unittest.TestCase):
         else:
             self.fail("result_rsi_series should not be None for valid data.")
 
+    def test_calculate_rsi_uses_default_period(self) -> None:
+        """Test RSI calculation uses the default period of 14."""
+        close_prices = [
+            44.34,
+            44.09,
+            44.15,
+            43.61,
+            44.33,
+            44.83,
+            45.10,
+            45.42,
+            45.84,
+            46.08,
+            45.89,
+            46.03,
+            45.61,
+            46.28,
+            46.28,
+            46.00,
+            46.03,
+            46.41,
+            46.22,
+            45.64,
+            46.21,
+            46.25,
+            45.71,
+            46.34,
+            46.00,
+            46.00,
+            45.69,
+            45.28,
+            45.09,
+            45.38,
+        ]
+        candles_df = pd.DataFrame({"close": pd.Series(close_prices, dtype=float)})
+        # Calculate expected RSI with the default period of 14
+        expected_rsi_series = ta.momentum.RSIIndicator(
+            close=candles_df["close"], window=14
+        ).rsi()
+        # Call calculate_rsi without the period argument
+        result_rsi_series = calculate_rsi(candles_df)
+        self.assertIsNotNone(result_rsi_series)
+        if result_rsi_series is not None:
+            pd.testing.assert_series_equal(
+                result_rsi_series, expected_rsi_series, check_dtype=False, rtol=1e-4
+            )
+
     def test_calculate_rsi_empty_dataframe(self) -> None:
         """Test RSI calculation with an empty DataFrame."""
         candles_df = pd.DataFrame(columns=["close"])
@@ -145,6 +192,7 @@ class TestTechnicalAnalysis(unittest.TestCase):
         self.mock_logger_instance.warning.assert_called_with(
             "Cannot calculate RSI: 'close' column is not numeric."
         )
+        self.mock_logger_instance.error.assert_not_called()
 
     def test_calculate_rsi_all_nan_close(self) -> None:
         """Test RSI with 'close' column containing all NaNs."""
@@ -348,6 +396,7 @@ class TestTechnicalAnalysis(unittest.TestCase):
         self.mock_logger_instance.warning.assert_called_with(
             "Cannot calculate SMA: 'close' column is not numeric."
         )
+        self.mock_logger_instance.error.assert_not_called()
 
     def test_calculate_sma_all_nan_close(self) -> None:
         """Test SMA with 'close' column containing all NaNs."""
@@ -431,6 +480,53 @@ class TestTechnicalAnalysis(unittest.TestCase):
         else:
             self.fail("result_sma_series became None after assertIsNotNone check.")
 
+    def test_calculate_sma_uses_default_period(self) -> None:
+        """Test SMA calculation uses the default period of 20."""
+        close_prices = [
+            44.34,
+            44.09,
+            44.15,
+            43.61,
+            44.33,
+            44.83,
+            45.10,
+            45.42,
+            45.84,
+            46.08,
+            45.89,
+            46.03,
+            45.61,
+            46.28,
+            46.28,
+            46.00,
+            46.03,
+            46.41,
+            46.22,
+            45.64,
+            46.21,
+            46.25,
+            45.71,
+            46.34,
+            46.00,
+            46.00,
+            45.69,
+            45.28,
+            45.09,
+            45.38,
+        ]
+        candles_df = pd.DataFrame({"close": pd.Series(close_prices, dtype=float)})
+        # Calculate expected SMA with the default period of 20
+        expected_sma_series = ta.trend.SMAIndicator(
+            close=candles_df["close"], window=20
+        ).sma_indicator()
+        # Call calculate_sma without the period argument
+        result_sma_series = calculate_sma(candles_df)
+        self.assertIsNotNone(result_sma_series)
+        if result_sma_series is not None:
+            pd.testing.assert_series_equal(
+                result_sma_series, expected_sma_series, check_dtype=False, rtol=1e-4
+            )
+
     @patch("trading.technical_analysis.ta.trend.SMAIndicator")
     def test_calculate_sma_generic_exception(
         self, MockSMAIndicatorClass: MagicMock
@@ -457,6 +553,41 @@ class TestTechnicalAnalysis(unittest.TestCase):
         args, kwargs_log = self.mock_logger_instance.error.call_args
         self.assertEqual(args[0], "Error calculating SMA: TA Library Method Error")
         self.assertTrue(kwargs_log.get("exc_info"))
+
+    def test_calculate_rsi_with_zero_period(self) -> None:
+        """Test RSI calculation raises AssertionError for a period of 0."""
+        candles_df = pd.DataFrame({"close": [1, 2, 3, 4, 5]})
+        with self.assertRaises(AssertionError) as cm:
+            calculate_rsi(candles_df, period=0)
+        self.assertEqual(str(cm.exception), "period must be a positive integer.")
+
+    def test_calculate_sma_with_zero_period(self) -> None:
+        """Test SMA calculation raises AssertionError for a period of 0."""
+        candles_df = pd.DataFrame({"close": [1, 2, 3, 4, 5]})
+        with self.assertRaises(AssertionError) as cm:
+            calculate_sma(candles_df, period=0)
+        self.assertEqual(str(cm.exception), "period must be a positive integer.")
+
+    def test_calculate_rsi_with_period_of_one(self) -> None:
+        """Test RSI calculation with a period of 1."""
+        candles_df = pd.DataFrame({"close": [10, 11, 12, 13, 14]})
+        result = calculate_rsi(candles_df, period=1)
+        self.assertIsNotNone(result, "RSI should not be None for period=1.")
+        if result is not None:
+            # For period=1, RSI is 100 for price increases, 0 for decreases.
+            # The 'ta' library implementation returns 100.0 for the first element.
+            expected = pd.Series([100.0, 100.0, 100.0, 100.0, 100.0], name="close")
+            pd.testing.assert_series_equal(result, expected, check_names=False)
+
+    def test_calculate_sma_with_period_of_one(self) -> None:
+        """Test SMA calculation with a period of 1."""
+        candles_df = pd.DataFrame({"close": [10, 11, 12, 13, 14]})
+        result = calculate_sma(candles_df, period=1)
+        self.assertIsNotNone(result, "SMA should not be None for period=1.")
+        if result is not None:
+            # For period=1, SMA is the series itself.
+            expected = pd.Series([10.0, 11.0, 12.0, 13.0, 14.0], name="close")
+            pd.testing.assert_series_equal(result, expected, check_names=False)
 
 
 if __name__ == "__main__":
