@@ -93,7 +93,7 @@ This section outlines the immediate next steps and high-level goals for future d
     *   [X] Created a `src` directory.
     *   [X] Moved the `trading` package and `main.py` into `src`.
     *   [X] Updated `pyproject.toml` to support the `src` layout.
-    *   [ ] Update all imports to be relative to the new `src` layout.
+    *   [X] Update all imports to be relative to the new `src` layout.
 
 ### 2. Future Roadmap
 
