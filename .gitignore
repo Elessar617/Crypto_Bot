@@ -1,23 +1,19 @@
-# Sensitive information
+# Environment & Sensitive Data
 .env
+.env.*
+!.env.example
 *.pem
 *_key
 *_secret
 *.key
 credentials.json
 
-# Bot data (logs, trade state files)
-bot_data/
-
-# Python bytecode
+# Python Generated Files
 __pycache__/
-.mutmut-cache
 *.py[cod]
 *$py.class
 *.so
 .Python
-
-# Distribution / packaging
 build/
 develop-eggs/
 dist/
@@ -34,51 +30,42 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Virtual Environments
+.venv/
 venv/
 env/
 ENV/
-.venv/
-.env/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IDE specific files
-.idea/
-.vscode/
-*.swp
-
-# Reports and Artifacts
-*_report.txt
-*.log
-
-# Testing
+# Testing, Coverage & Mutation
+.mutmut-cache
 .mypy_cache/
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
-*.swo
-.spyderproject
-.spyproject
-.ropeproject
-
-# Testing
-.coverage
-htmlcov/
-.pytest_cache/
 .tox/
 .nox/
-coverage.xml
 *.cover
 
-# Logs
-logs/
+# Reports & Logs
 *.log
 log.txt
 bot_log*.txt
+logs/
+*_report.txt
+*.report.json
+report.json
+pytest_results.txt
+trade_manager_report.json
 
-# OS specific
+# IDE & Editor Config
+.idea/
+.vscode/
+*.sw[op]
+.spyderproject
+.ropeproject
+
+# OS Specific
 .DS_Store
 .DS_Store?
 ._*
@@ -86,4 +73,6 @@ bot_log*.txt
 .Trashes
 ehthumbs.db
 Thumbs.db
-.bandit.yml
+
+# Jupyter Notebook
+.ipynb_checkpoints

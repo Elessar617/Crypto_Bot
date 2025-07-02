@@ -392,6 +392,17 @@ class TestCoinbaseClient(unittest.TestCase):
             exc_info=True,
         )
 
+    def test_get_public_candles_unsupported_granularity(self):
+        """Test get_public_candles with an unsupported granularity."""
+        result = self.client.get_public_candles(
+            product_id="BTC-USD",
+            granularity="INVALID_GRANULARITY",
+        )
+        self.assertIsNone(result)
+        self.mock_logger_instance.error.assert_called_once_with(
+            "Unsupported granularity: INVALID_GRANULARITY"
+        )
+
     # --- Test get_product ---
 
     def test_get_product_no_client(self):
@@ -1331,6 +1342,34 @@ class TestCoinbaseClient(unittest.TestCase):
         self.mock_logger_instance.error.assert_called_once_with(
             "Failed to cancel order order-id-1. Reason: ORDER_NOT_FOUND"
         )
+
+
+    def test_get_public_candles_one_minute_granularity_start_time(self):
+        """Test get_public_candles calculates the start time correctly for ONE_MINUTE granularity."""
+        self.mock_rest_client_instance.get_public_candles.return_value = {
+            "candles": []
+        }
+
+        # Mock current time to have a predictable value
+        mock_now = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        with patch("trading.coinbase_client.datetime", wraps=datetime) as mock_datetime:
+            mock_datetime.now.return_value = mock_now
+            self.client.get_public_candles(
+                product_id="BTC-USD",
+                granularity="ONE_MINUTE",
+                start=None,  # Explicitly set to None to trigger calculation
+                end=None,
+            )
+
+        expected_start_dt = mock_now - timedelta(minutes=300)
+        expected_start_timestamp = str(int(expected_start_dt.timestamp()))
+
+        self.mock_rest_client_instance.get_public_candles.assert_called_once()
+        _args, kwargs = self.mock_rest_client_instance.get_public_candles.call_args
+        self.assertEqual(kwargs.get("start"), expected_start_timestamp)
+        self.assertEqual(kwargs.get("product_id"), "BTC-USD")
+        self.assertEqual(kwargs.get("granularity"), "ONE_MINUTE")
 
 
 if __name__ == "__main__":
