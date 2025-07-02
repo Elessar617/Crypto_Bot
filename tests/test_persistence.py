@@ -3,562 +3,676 @@ Unit tests for the persistence.py module.
 """
 
 import unittest
-import os
-import json
-from unittest.mock import patch, mock_open, MagicMock
+import pytest
+from unittest.mock import mock_open, patch
+from trading.persistence import PersistenceManager
 
-# Adjust the path to import persistence from the parent directory
-import sys
-
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PARENT_DIR = os.path.dirname(SCRIPT_DIR)
-MODULE_DIR = os.path.join(PARENT_DIR, "v6")  # Assuming v6 is where persistence.py is
-if MODULE_DIR not in sys.path:
-    sys.path.append(MODULE_DIR)
-
-import persistence
-
-# Define a consistent DATA_DIR for tests, mirroring persistence.py logic
-# This should point to a temporary or test-specific data directory if real file ops are tested,
-# but since we mock, it's more about consistency with the module's internal path construction.
-TEST_PERSISTENCE_DIR = os.path.join(MODULE_DIR, "data")
+# Define a consistent DATA_DIR for tests. Since all file operations are mocked,
+# this is primarily for ensuring the mock paths are consistent.
+TEST_PERSISTENCE_DIR = "tests/mock_data"
 
 
-class TestPersistence(unittest.TestCase):
-    """Test suite for persistence functions."""
+@pytest.fixture
+def persistence_manager(mock_logger, tmp_path):
+    """Provides a PersistenceManager instance with a mock logger and temp directory."""
+    # tmp_path is a pytest fixture providing a temporary directory unique to the test.
+    manager = PersistenceManager(persistence_dir=str(tmp_path), logger=mock_logger)
+    return manager
 
-    def setUp(self):
-        """Set up for test methods."""
-        # Ensure persistence module is loaded
-        self.assertIsNotNone(persistence, "Persistence module failed to load.")
-        # This path is used by the persistence module internally. We mock its behavior.
-        self.persistence_dir_patch = patch(
-            "persistence.PERSISTENCE_DIR", TEST_PERSISTENCE_DIR
-        )
-        self.mock_persistence_dir = self.persistence_dir_patch.start()
-        self.addCleanup(self.persistence_dir_patch.stop)
 
-    @patch("persistence.os.makedirs")
-    @patch("persistence.open", new_callable=mock_open)
-    @patch("persistence.json.dump")
+class TestPersistenceManager:
+    """Test suite for persistence functions, pytest-style."""
+
+    @patch("trading.persistence.os.makedirs")
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("json.dump")
     def test_save_trade_state_success(
-        self, mock_json_dump, mock_file_open, mock_os_makedirs
+        self, mock_json_dump, mock_file_open, mock_os_makedirs, persistence_manager
     ):
         """Test save_trade_state successfully saves data."""
         asset_id = "BTC-USD"
         state_data = {"key": "value", "number": 123}
-        expected_file_path = os.path.join(
-            TEST_PERSISTENCE_DIR, f"{asset_id}_trade_state.json"
+        expected_file_path = persistence_manager._get_file_path(asset_id)
+
+        persistence_manager.save_trade_state(asset_id, state_data)
+
+        mock_os_makedirs.assert_called_once_with(
+            persistence_manager.persistence_dir, exist_ok=True
         )
-
-        persistence.save_trade_state(asset_id, state_data)
-
-        mock_os_makedirs.assert_called_once_with(TEST_PERSISTENCE_DIR, exist_ok=True)
         mock_file_open.assert_called_once_with(
             expected_file_path, "w", encoding="utf-8"
         )
         mock_json_dump.assert_called_once_with(state_data, mock_file_open(), indent=4)
 
-    @patch("persistence.os.makedirs")
-    @patch("persistence.open", new_callable=mock_open)
-    @patch("persistence.json.dump")
-    def test_save_trade_state_creates_dir(
-        self, mock_json_dump, mock_file_open, mock_os_makedirs
-    ):
-        """Test save_trade_state creates PERSISTENCE_DIR if it doesn't exist."""
-        asset_id = "ETH-USD"
-        state_data = {"another_key": "another_value"}
-        expected_file_path = os.path.join(
-            TEST_PERSISTENCE_DIR, f"{asset_id}_trade_state.json"
-        )
-
-        persistence.save_trade_state(asset_id, state_data)
-
-        mock_os_makedirs.assert_called_once_with(TEST_PERSISTENCE_DIR, exist_ok=True)
-        mock_file_open.assert_called_once_with(
-            expected_file_path, "w", encoding="utf-8"
-        )
-        mock_json_dump.assert_called_once_with(state_data, mock_file_open(), indent=4)
-
-    @patch("persistence.os.path.exists")
-    @patch("persistence.open", new_callable=mock_open, read_data='{"key": "value"}')
-    @patch("persistence.json.load")
+    @patch("trading.persistence.os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data='{"key": "value"}')
+    @patch("json.load")
     def test_load_trade_state_success(
-        self, mock_json_load, mock_file_open, mock_os_exists
+        self, mock_json_load, mock_file_open, mock_os_exists, persistence_manager
     ):
         """Test load_trade_state successfully loads data."""
-        mock_os_exists.return_value = True
         asset_id = "BTC-USD"
         expected_data = {"key": "value"}
         mock_json_load.return_value = expected_data
-        expected_file_path = os.path.join(
-            TEST_PERSISTENCE_DIR, f"{asset_id}_trade_state.json"
-        )
+        expected_file_path = persistence_manager._get_file_path(asset_id)
 
-        loaded_data = persistence.load_trade_state(asset_id)
+        loaded_data = persistence_manager.load_trade_state(asset_id)
 
         mock_os_exists.assert_called_once_with(expected_file_path)
         mock_file_open.assert_called_once_with(
             expected_file_path, "r", encoding="utf-8"
         )
         mock_json_load.assert_called_once_with(mock_file_open())
-        self.assertEqual(loaded_data, expected_data)
+        assert loaded_data == expected_data
 
-    @patch("persistence.os.path.exists")
-    def test_load_trade_state_file_not_found(self, mock_os_exists):
-        """Test load_trade_state returns empty dict if file not found."""
-        mock_os_exists.return_value = False
-        asset_id = "LTC-USD"
-        expected_file_path = os.path.join(
-            TEST_PERSISTENCE_DIR, f"{asset_id}_trade_state.json"
-        )
+    @patch("os.path.exists", return_value=False)
+    def test_load_trade_state_file_not_found(self, mock_exists, persistence_manager):
+        """Test load_trade_state returns empty dict if file doesn't exist."""
+        assert persistence_manager.load_trade_state("NO-ASSET") == {}
+        mock_exists.assert_called_once()
 
-        loaded_data = persistence.load_trade_state(asset_id)
-
-        mock_os_exists.assert_called_once_with(expected_file_path)
-        self.assertEqual(loaded_data, {})
-
-    @patch("persistence.os.path.exists")
-    @patch("persistence.open", new_callable=mock_open, read_data="this is not json")
-    @patch("persistence.json.load", side_effect=json.JSONDecodeError("Error", "doc", 0))
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data="invalid json")
     def test_load_trade_state_json_decode_error(
-        self, mock_json_load, mock_file_open, mock_os_exists
+        self, mock_file, mock_exists, persistence_manager
     ):
-        """Test load_trade_state returns empty dict on JSONDecodeError."""
-        mock_os_exists.return_value = True
-        asset_id = "XRP-USD"
-        expected_file_path = os.path.join(
-            TEST_PERSISTENCE_DIR, f"{asset_id}_trade_state.json"
-        )
+        """Test load_trade_state returns empty dict on JSON decode error."""
+        assert persistence_manager.load_trade_state("BAD-JSON") == {}
 
-        loaded_data = persistence.load_trade_state(asset_id)
-
-        mock_os_exists.assert_called_once_with(expected_file_path)
-        mock_file_open.assert_called_once_with(
-            expected_file_path, "r", encoding="utf-8"
-        )
-        mock_json_load.assert_called_once_with(mock_file_open())
-        self.assertEqual(loaded_data, {})
-
-    @patch("persistence.os.path.exists")
-    @patch("persistence.open", new_callable=mock_open)
-    @patch("persistence.json.load")
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=mock_open, read_data='["not a dict"]')
     def test_load_trade_state_corrupted_data_not_dict(
-        self, mock_json_load, mock_file_open, mock_os_exists
+        self, mock_exists, mock_file, persistence_manager
     ):
-        """Test load_trade_state returns empty dict if loaded data is not a dictionary."""
-        mock_os_exists.return_value = True
-        asset_id = "ADA-USD"
-        mock_json_load.return_value = "this is a string, not a dict"
-        expected_file_path = os.path.join(
-            TEST_PERSISTENCE_DIR, f"{asset_id}_trade_state.json"
-        )
-
-        loaded_data = persistence.load_trade_state(asset_id)
-
-        mock_os_exists.assert_called_once_with(expected_file_path)
-        mock_file_open.assert_called_once_with(
-            expected_file_path, "r", encoding="utf-8"
-        )
-        mock_json_load.assert_called_once_with(mock_file_open())
-        self.assertEqual(loaded_data, {})
+        """Test load_trade_state returns empty dict if data is not a dictionary."""
+        assert persistence_manager.load_trade_state("CORRUPTED") == {}
 
     # --- Tests for open_buy_order helper functions ---
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
-    def test_save_open_buy_order(self, mock_load_trade_state, mock_save_trade_state):
+    @patch.object(PersistenceManager, "save_trade_state")
+    @patch.object(PersistenceManager, "load_trade_state", return_value={})
+    def test_save_open_buy_order(
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
+    ):
         """Test save_open_buy_order correctly structures and saves data."""
         asset_id = "BTC-USD"
-        order_id = "order123"
-        buy_params = {"price": "30000", "size": "0.01"}
+        order_id = "12345"
+        order_details = {"size": "1", "price": "50000"}
 
-        # Simulate load_trade_state returning an empty state or some existing state
-        mock_load_trade_state.return_value = {"some_other_key": "some_value"}
+        persistence_manager.save_open_buy_order(asset_id, order_id, order_details)
 
-        persistence.save_open_buy_order(asset_id, order_id, buy_params)
-
-        mock_load_trade_state.assert_called_once_with(asset_id)
-        expected_saved_state = {
-            "some_other_key": "some_value",
-            "open_buy_order": {"order_id": order_id, "params": buy_params},
+        expected_state = {
+            "open_buy_order": {"order_id": order_id, "params": order_details}
         }
-        mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
-
-    @patch("persistence.load_trade_state")
-    def test_load_open_buy_order_success(self, mock_load_trade_state):
-        """Test load_open_buy_order successfully retrieves order details."""
-        asset_id = "ETH-USD"
-        order_details = {"order_id": "order456", "params": {"price": "2000"}}
-        mock_load_trade_state.return_value = {"open_buy_order": order_details}
-
-        result = persistence.load_open_buy_order(asset_id)
-
         mock_load_trade_state.assert_called_once_with(asset_id)
-        self.assertEqual(result, order_details)
+        mock_save_trade_state.assert_called_once_with(asset_id, expected_state)
 
-    @patch("persistence.load_trade_state")
-    def test_load_open_buy_order_not_found(self, mock_load_trade_state):
+    @patch.object(
+        PersistenceManager,
+        "load_trade_state",
+        return_value={"open_buy_order": {"order_id": "123", "params": {"a": 1}}},
+    )
+    def test_load_open_buy_order_success(
+        self, mock_load_trade_state, persistence_manager
+    ):
+        """Test load_open_buy_order successfully retrieves order details."""
+        result = persistence_manager.load_open_buy_order("BTC-USD")
+        assert result == {"order_id": "123", "params": {"a": 1}}
+
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
+    def test_load_open_buy_order_not_found(
+        self, mock_load_trade_state, persistence_manager
+    ):
         """Test load_open_buy_order returns None if no open order exists."""
-        asset_id = "LTC-USD"
-        mock_load_trade_state.return_value = {
-            "some_other_key": "data"
-        }  # No 'open_buy_order' key
+        mock_load_trade_state.return_value = {"no_order": True}
+        assert persistence_manager.load_open_buy_order("BTC-USD") is None
 
-        result = persistence.load_open_buy_order(asset_id)
-        self.assertIsNone(result)
-
-        mock_load_trade_state.return_value = {}  # Empty state
-        result = persistence.load_open_buy_order(asset_id)
-        self.assertIsNone(result)
-
-    @patch("persistence.load_trade_state")
-    def test_load_open_buy_order_corrupted_data(self, mock_load_trade_state):
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
+    def test_load_open_buy_order_corrupted_data(
+        self, mock_load_trade_state, persistence_manager
+    ):
         """Test load_open_buy_order returns None if data is malformed."""
-        asset_id = "XRP-USD"
-        # Case 1: open_buy_order is not a dict
-        mock_load_trade_state.return_value = {"open_buy_order": "not_a_dict"}
-        self.assertIsNone(persistence.load_open_buy_order(asset_id))
+        mock_load_trade_state.return_value = {"open_buy_order": "string"}
+        assert persistence_manager.load_open_buy_order("BTC-USD") is None
 
-        # Case 2: open_buy_order is a dict but missing 'order_id'
-        mock_load_trade_state.return_value = {"open_buy_order": {"params": {}}}
-        self.assertIsNone(persistence.load_open_buy_order(asset_id))
-
-        # Case 3: open_buy_order is a dict but missing 'params'
-        mock_load_trade_state.return_value = {"open_buy_order": {"order_id": "123"}}
-        self.assertIsNone(persistence.load_open_buy_order(asset_id))
-
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_clear_open_buy_order_exists(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test clear_open_buy_order removes the order if it exists."""
-        asset_id = "ADA-USD"
-        initial_state = {
-            "open_buy_order": {"order_id": "order789", "params": {}},
-            "other_data": "remains",
-        }
-        mock_load_trade_state.return_value = initial_state
-
-        persistence.clear_open_buy_order(asset_id)
-
+        asset_id = "BTC-USD"
+        mock_load_trade_state.return_value = {"open_buy_order": {"order_id": "123"}}
+        persistence_manager.clear_open_buy_order(asset_id)
         mock_load_trade_state.assert_called_once_with(asset_id)
-        expected_saved_state = {"other_data": "remains"}
-        mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
+        mock_save_trade_state.assert_called_once_with(asset_id, {})
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_clear_open_buy_order_not_exists(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test clear_open_buy_order does nothing if order doesn't exist."""
-        asset_id = "SOL-USD"
-        initial_state = {"other_data": "remains"}  # No open_buy_order
-        mock_load_trade_state.return_value = initial_state
-
-        persistence.clear_open_buy_order(asset_id)
-
+        asset_id = "BTC-USD"
+        mock_load_trade_state.return_value = {}
+        persistence_manager.clear_open_buy_order(asset_id)
         mock_load_trade_state.assert_called_once_with(asset_id)
-        mock_save_trade_state.assert_not_called()  # save_trade_state should not be called
+        mock_save_trade_state.assert_not_called()
 
     # --- Tests for filled_buy_trade helper functions ---
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
-    def test_save_filled_buy_trade(self, mock_load_trade_state, mock_save_trade_state):
+    @patch.object(PersistenceManager, "save_trade_state")
+    @patch.object(PersistenceManager, "load_trade_state")
+    def test_save_filled_buy_trade(
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
+    ):
         """Test save_filled_buy_trade correctly structures and saves data."""
-        asset_id = "DOT-USD"
-        trade_details = {
-            "price": "7.5",
-            "quantity": "10",
-            "timestamp": "2023-01-01T00:00:00Z",
+        # Arrange
+        asset_id = "BTC-USD"
+        buy_order_id = "buy123"
+        filled_order = {
+            "average_filled_price": "50000",
+            "filled_size": "1",
+            "created_time": "2023-01-01T12:00:00Z",
         }
-        mock_load_trade_state.return_value = {"some_other_data": "value"}
+        sell_params = [{"price": "51000", "size": "0.5"}]
 
-        persistence.save_filled_buy_trade(asset_id, trade_details)
-
-        mock_load_trade_state.assert_called_once_with(asset_id)
-        expected_saved_state = {
+        # This is what load_trade_state will return
+        initial_state = {
             "some_other_data": "value",
-            "filled_buy_trade": trade_details,
+            "open_buy_order": {"order_id": "old_order"},
         }
-        mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
+        mock_load_trade_state.return_value = initial_state
 
-    @patch("persistence.load_trade_state")
-    def test_load_filled_buy_trade_success(self, mock_load_trade_state):
-        """Test load_filled_buy_trade successfully retrieves trade details."""
-        asset_id = "AVAX-USD"
-        trade_details = {"price": "15", "quantity": "5", "id": "trade001"}
-        mock_load_trade_state.return_value = {"filled_buy_trade": trade_details}
+        # This is what the state should look like when save_trade_state is called
+        expected_state_after_modification = {
+            "some_other_data": "value",
+            "filled_buy_trade": {
+                "buy_order_id": buy_order_id,
+                "timestamp": "2023-01-01T12:00:00Z",
+                "buy_price": "50000",
+                "buy_quantity": "1",
+                "associated_sell_orders": [],
+                "sell_orders_params": sell_params,
+            },
+        }
 
-        result = persistence.load_filled_buy_trade(asset_id)
+        # Act
+        persistence_manager.save_filled_buy_trade(
+            asset_id, buy_order_id, filled_order, sell_params
+        )
 
+        # Assert
         mock_load_trade_state.assert_called_once_with(asset_id)
-        self.assertEqual(result, trade_details)
+        mock_save_trade_state.assert_called_once_with(
+            asset_id, expected_state_after_modification
+        )
 
-    @patch("persistence.load_trade_state")
-    def test_load_filled_buy_trade_not_found(self, mock_load_trade_state):
-        """Test load_filled_buy_trade returns None if no filled trade exists."""
-        asset_id = "MATIC-USD"
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
+    def test_load_filled_buy_trade_success(
+        self, mock_load_trade_state, persistence_manager
+    ):
+        """Test load_filled_buy_trade successfully retrieves trade details."""
         mock_load_trade_state.return_value = {
-            "open_buy_order": {}
-        }  # No 'filled_buy_trade'
-        self.assertIsNone(persistence.load_filled_buy_trade(asset_id))
+            "filled_buy_trade": {"buy_order_id": "123"}
+        }
+        result = persistence_manager.load_filled_buy_trade("BTC-USD")
+        assert result == {"buy_order_id": "123"}
 
-        mock_load_trade_state.reset_mock()
-        mock_load_trade_state.return_value = {}  # Empty state
-        self.assertIsNone(persistence.load_filled_buy_trade(asset_id))
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
+    def test_load_filled_buy_trade_not_found(
+        self, mock_load_trade_state, persistence_manager
+    ):
+        """Test load_filled_buy_trade returns None if no filled trade exists."""
+        mock_load_trade_state.return_value = {"no_trade": True}
+        assert persistence_manager.load_filled_buy_trade("BTC-USD") is None
 
-    @patch("persistence.load_trade_state")
-    def test_load_filled_buy_trade_corrupted_data(self, mock_load_trade_state):
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
+    def test_load_filled_buy_trade_corrupted_data(
+        self, mock_load_trade_state, persistence_manager
+    ):
         """Test load_filled_buy_trade returns None if data is malformed."""
-        asset_id = "LINK-USD"
-        # Case 1: filled_buy_trade is not a dict
-        mock_load_trade_state.return_value = {"filled_buy_trade": "not_a_dict"}
-        self.assertIsNone(persistence.load_filled_buy_trade(asset_id))
+        mock_load_trade_state.return_value = {"filled_buy_trade": "string"}
+        assert persistence_manager.load_filled_buy_trade("BTC-USD") is None
 
-        # Case 2: filled_buy_trade is a dict but missing 'price'
-        mock_load_trade_state.reset_mock()
-        mock_load_trade_state.return_value = {"filled_buy_trade": {"quantity": "10"}}
-        self.assertIsNone(persistence.load_filled_buy_trade(asset_id))
-
-        # Case 3: filled_buy_trade is a dict but missing 'quantity'
-        mock_load_trade_state.reset_mock()
-        mock_load_trade_state.return_value = {"filled_buy_trade": {"price": "100"}}
-        self.assertIsNone(persistence.load_filled_buy_trade(asset_id))
-
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_clear_filled_buy_trade_exists(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test clear_filled_buy_trade removes the trade if it exists."""
-        asset_id = "UNI-USD"
-        initial_state = {
-            "filled_buy_trade": {"price": "5", "quantity": "20"},
-            "other_info": "test",
+        asset_id = "BTC-USD"
+        mock_load_trade_state.return_value = {
+            "filled_buy_trade": {"buy_order_id": "123"}
         }
-        mock_load_trade_state.return_value = initial_state
-
-        persistence.clear_filled_buy_trade(asset_id)
-
+        persistence_manager.clear_filled_buy_trade(asset_id)
         mock_load_trade_state.assert_called_once_with(asset_id)
-        expected_saved_state = {"other_info": "test"}
-        mock_save_trade_state.assert_called_once_with(asset_id, expected_saved_state)
+        mock_save_trade_state.assert_called_once_with(asset_id, {})
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_clear_filled_buy_trade_not_exists(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test clear_filled_buy_trade does nothing if trade doesn't exist."""
-        asset_id = "ICP-USD"
-        initial_state = {"some_data": "info"}  # No filled_buy_trade
-        mock_load_trade_state.return_value = initial_state
-
-        persistence.clear_filled_buy_trade(asset_id)
-
+        asset_id = "BTC-USD"
+        mock_load_trade_state.return_value = {}
+        persistence_manager.clear_filled_buy_trade(asset_id)
         mock_load_trade_state.assert_called_once_with(asset_id)
         mock_save_trade_state.assert_not_called()
 
     # --- Tests for associated_sell_orders helper functions ---
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_add_sell_order_to_filled_trade_success(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test adding a sell order to an existing filled trade."""
-        asset_id = "ATOM-USD"
-        sell_order_id = "sell789"
-        sell_order_details = {
-            "order_id": sell_order_id,
-            "price": "12",
-            "status": "OPEN",
-        }
-        initial_filled_trade = {
-            "price": "10",
-            "quantity": "5",
-            "associated_sell_orders": [],
-        }
-        mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
+        asset_id = "BTC-USD"
+        buy_order_id = "buy123"
+        sell_order_details = {"order_id": "sell456", "price": "52000"}
 
-        persistence.add_sell_order_to_filled_trade(
-            asset_id, sell_order_id, sell_order_details
+        mock_load_trade_state.return_value = {
+            "filled_buy_trade": {
+                "buy_order_id": buy_order_id,
+                "associated_sell_orders": [],
+            }
+        }
+
+        persistence_manager.add_sell_order_to_filled_trade(
+            asset_id, buy_order_id, sell_order_details
         )
 
-        mock_load_trade_state.assert_called_once_with(asset_id)
-        expected_filled_trade = {
-            "price": "10",
-            "quantity": "5",
-            "associated_sell_orders": [sell_order_details],
+        expected_state = {
+            "filled_buy_trade": {
+                "buy_order_id": "buy123",
+                "associated_sell_orders": [sell_order_details],
+            }
         }
-        mock_save_trade_state.assert_called_once_with(
-            asset_id, {"filled_buy_trade": expected_filled_trade}
-        )
+        mock_save_trade_state.assert_called_once_with(asset_id, expected_state)
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_add_sell_order_creates_list_if_not_exists(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test add_sell_order creates associated_sell_orders list if it's missing."""
-        asset_id = "XTZ-USD"
-        sell_order_id = "sell101"
-        sell_order_details = {
-            "order_id": sell_order_id,
-            "price": "1.5",
-            "status": "NEW",
-        }
-        # No 'associated_sell_orders' key initially
-        initial_filled_trade = {"price": "1.2", "quantity": "100"}
-        mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
+        asset_id = "BTC-USD"
+        buy_order_id = "buy123"
+        sell_order_details = {"order_id": "sell456"}
 
-        persistence.add_sell_order_to_filled_trade(
-            asset_id, sell_order_id, sell_order_details
+        mock_load_trade_state.return_value = {
+            "filled_buy_trade": {"buy_order_id": "buy123"}
+        }
+
+        persistence_manager.add_sell_order_to_filled_trade(
+            asset_id, buy_order_id, sell_order_details
         )
 
-        expected_filled_trade = {
-            "price": "1.2",
-            "quantity": "100",
-            "associated_sell_orders": [sell_order_details],
+        expected_state = {
+            "filled_buy_trade": {
+                "buy_order_id": "buy123",
+                "associated_sell_orders": [sell_order_details],
+            }
         }
-        mock_save_trade_state.assert_called_once_with(
-            asset_id, {"filled_buy_trade": expected_filled_trade}
-        )
+        mock_save_trade_state.assert_called_once_with(asset_id, expected_state)
 
-    @patch("persistence.load_trade_state")
-    def test_add_sell_order_no_filled_trade(self, mock_load_trade_state):
-        """Test add_sell_order raises ValueError if no filled trade exists."""
-        asset_id = "FIL-USD"
-        mock_load_trade_state.return_value = {}  # No filled_buy_trade
-        with self.assertRaisesRegex(
-            ValueError, f"No filled buy trade found for {asset_id}"
-        ):
-            persistence.add_sell_order_to_filled_trade(
-                asset_id, "sell112", {"order_id": "sell112"}
-            )
-
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_add_sell_order_duplicate_not_added(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
-        """Test add_sell_order does not add a duplicate sell order ID."""
-        asset_id = "GRT-USD"
-        sell_order_id = "sellDuplicate"
-        existing_sell_order = {
-            "order_id": sell_order_id,
-            "price": "0.3",
-            "status": "OPEN",
-        }
-        sell_order_details_new = {
-            "order_id": sell_order_id,
-            "price": "0.31",
-            "status": "PENDING",
-        }  # Same ID
+        """Test that a duplicate sell order is not added."""
+        asset_id = "BTC-USD"
+        buy_order_id = "buy123"
+        sell_order_details = {"order_id": "sell456"}  # Duplicate ID
 
-        initial_filled_trade = {
-            "price": "0.25",
-            "quantity": "1000",
-            "associated_sell_orders": [existing_sell_order],
+        mock_load_trade_state.return_value = {
+            "filled_buy_trade": {
+                "buy_order_id": buy_order_id,
+                "associated_sell_orders": [{"order_id": "sell456", "status": "open"}],
+            }
         }
-        mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
 
-        persistence.add_sell_order_to_filled_trade(
-            asset_id, sell_order_id, sell_order_details_new
+        persistence_manager.add_sell_order_to_filled_trade(
+            asset_id, buy_order_id, sell_order_details
         )
 
-        mock_save_trade_state.assert_not_called()  # Should not save if duplicate and not updating
-
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
-    def test_update_sell_order_status_success(
-        self, mock_load_trade_state, mock_save_trade_state
-    ):
-        """Test updating status of an existing sell order."""
-        asset_id = "AAVE-USD"
-        sell_order_id = "sellOrderToUpdate"
-        new_status = "FILLED"
-        initial_sell_orders = [
-            {"order_id": "sellOrderOther", "status": "OPEN"},
-            {"order_id": sell_order_id, "status": "OPEN"},
-        ]
-        initial_filled_trade = {
-            "price": "100",
-            "quantity": "1",
-            "associated_sell_orders": initial_sell_orders,
-        }
-        mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
-
-        result = persistence.update_sell_order_status_in_filled_trade(
-            asset_id, sell_order_id, new_status
-        )
-        self.assertTrue(result)
-
-        expected_sell_orders = [
-            {"order_id": "sellOrderOther", "status": "OPEN"},
-            {"order_id": sell_order_id, "status": new_status},
-        ]
-        expected_filled_trade = {
-            "price": "100",
-            "quantity": "1",
-            "associated_sell_orders": expected_sell_orders,
-        }
-        mock_save_trade_state.assert_called_once_with(
-            asset_id, {"filled_buy_trade": expected_filled_trade}
-        )
-
-    @patch("persistence.load_trade_state")
-    def test_update_sell_order_status_no_filled_trade(self, mock_load_trade_state):
-        """Test update_sell_order_status raises ValueError if no filled trade."""
-        asset_id = "COMP-USD"
-        mock_load_trade_state.return_value = {}
-        with self.assertRaisesRegex(
-            ValueError, f"No filled buy trade found for {asset_id}"
-        ):
-            persistence.update_sell_order_status_in_filled_trade(
-                asset_id, "anyID", "FILLED"
-            )
-
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
-    def test_update_sell_order_status_no_sell_orders_list(
-        self, mock_load_trade_state, mock_save_trade_state
-    ):
-        """Test update returns False if associated_sell_orders list is missing."""
-        asset_id = "SNX-USD"
-        # 'associated_sell_orders' key is missing
-        initial_filled_trade = {"price": "3", "quantity": "50"}
-        mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
-
-        result = persistence.update_sell_order_status_in_filled_trade(
-            asset_id, "anyID", "FILLED"
-        )
-        self.assertFalse(result)
         mock_save_trade_state.assert_not_called()
 
-    @patch("persistence.save_trade_state")
-    @patch("persistence.load_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
+    def test_add_sell_order_no_filled_trade(
+        self, mock_load_trade_state, persistence_manager
+    ):
+        """Test ValueError is raised if no filled trade exists."""
+        mock_load_trade_state.return_value = {}
+        with pytest.raises(ValueError):
+            persistence_manager.add_sell_order_to_filled_trade(
+                "BTC-USD", "buy123", {"order_id": "sell456"}
+            )
+
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
+    def test_update_sell_order_status_success(
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
+    ):
+        """Test sell order status is updated successfully."""
+        asset_id = "BTC-USD"
+        buy_order_id = "buy123"
+        sell_order_id = "sell456"
+        new_status = "filled"
+
+        mock_load_trade_state.return_value = {
+            "filled_buy_trade": {
+                "buy_order_id": buy_order_id,
+                "associated_sell_orders": [{"order_id": "sell456", "status": "open"}],
+            }
+        }
+
+        result = persistence_manager.update_sell_order_status_in_filled_trade(
+            asset_id, buy_order_id, sell_order_id, new_status
+        )
+
+        assert result is True
+        expected_state = mock_load_trade_state.return_value
+        expected_state["filled_buy_trade"]["associated_sell_orders"][0][
+            "status"
+        ] = new_status
+        mock_save_trade_state.assert_called_once_with(asset_id, expected_state)
+
+    def test_update_sell_order_status_no_filled_trade(self, persistence_manager):
+        """Test update raises ValueError if no filled trade exists."""
+        with patch.object(persistence_manager, "load_trade_state", return_value={}):
+            with pytest.raises(ValueError):
+                persistence_manager.update_sell_order_status_in_filled_trade(
+                    "BTC-USD", "buy123", "sell456", "filled"
+                )
+
+    def test_update_sell_order_status_no_sell_orders_list(self, persistence_manager):
+        """Test update returns False if associated_sell_orders list is missing."""
+        with patch.object(
+            persistence_manager,
+            "load_trade_state",
+            return_value={"filled_buy_trade": {"buy_order_id": "buy123"}},
+        ):
+            result = persistence_manager.update_sell_order_status_in_filled_trade(
+                "BTC-USD", "buy123", "sell456", "filled"
+            )
+            assert result is False
+
+    @patch("trading.persistence.PersistenceManager.save_trade_state")
+    @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_update_sell_order_status_order_not_found(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test update returns False if specific sell order ID is not found."""
-        asset_id = "MKR-USD"
-        initial_sell_orders = [{"order_id": "actualSellID", "status": "OPEN"}]
-        initial_filled_trade = {
-            "price": "1000",
-            "quantity": "0.1",
-            "associated_sell_orders": initial_sell_orders,
-        }
-        mock_load_trade_state.return_value = {"filled_buy_trade": initial_filled_trade}
+        asset_id = "BTC-USD"
+        buy_order_id = "buy123"
+        sell_order_id = "sell456-not-found"
+        new_status = "filled"
 
-        result = persistence.update_sell_order_status_in_filled_trade(
-            asset_id, "nonExistentID", "FILLED"
+        mock_load_trade_state.return_value = {
+            "filled_buy_trade": {
+                "buy_order_id": buy_order_id,
+                "associated_sell_orders": [{"order_id": "sellXYZ", "status": "open"}],
+            }
+        }
+
+        result = persistence_manager.update_sell_order_status_in_filled_trade(
+            asset_id, buy_order_id, sell_order_id, new_status
         )
-        self.assertFalse(result)
+        assert result is False
         mock_save_trade_state.assert_not_called()
+
+
+def test_save_trade_state_empty_asset_id_raises_error(persistence_manager):
+    """Kill mutant #3 & #4: Test that an empty asset_id raises an AssertionError."""
+    with pytest.raises(
+        AssertionError, match=r"^asset_id must be a non-empty string\.$"
+    ):
+        persistence_manager.save_trade_state("", {"key": "value"})
+
+
+def test_save_trade_state_invalid_state_data_raises_error(persistence_manager):
+    """Kill mutant #5: Test that non-dict state_data raises an AssertionError."""
+    with pytest.raises(AssertionError, match=r"^state_data must be a dictionary\.$"):
+        persistence_manager.save_trade_state("test-asset", "not-a-dict")
+
+
+def test_save_trade_state_bad_path_raises_error(persistence_manager):
+    """Kill mutant #8: Test that a bad file path raises an AssertionError."""
+    with patch.object(
+        persistence_manager, "_get_file_path", return_value="some/relative/path"
+    ):
+        with pytest.raises(
+            AssertionError, match=r"^File path construction seems incorrect\.$"
+        ):
+            persistence_manager.save_trade_state("test-asset", {"key": "value"})
+
+
+def test_save_trade_state_io_error_logs_traceback(persistence_manager):
+    """Kill mutant #13: Test that IOError on save logs with exc_info=True."""
+    asset_id = "test-asset"
+    state_data = {"key": "value"}
+
+    with patch("builtins.open", side_effect=IOError("Disk full")):
+        with pytest.raises(IOError):
+            persistence_manager.save_trade_state(asset_id, state_data)
+
+    persistence_manager.logger.error.assert_called()
+    args, kwargs = persistence_manager.logger.error.call_args
+    assert "exc_info" in kwargs
+    assert kwargs["exc_info"] is True
+
+
+def test_save_trade_state_type_error_logs_traceback(persistence_manager):
+    """Kill mutants #14 & #15: Test TypeError on save logs with exc_info=True."""
+    asset_id = "test-asset"
+    # A set is not JSON-serializable
+    state_data = {"key": {1, 2, 3}}
+
+    with pytest.raises(
+        TypeError, match=r"^state_data contains non-serializable content\.$"
+    ):
+        persistence_manager.save_trade_state(asset_id, state_data)
+
+    persistence_manager.logger.error.assert_called()
+    args, kwargs = persistence_manager.logger.error.call_args
+    assert "exc_info" in kwargs
+    assert kwargs["exc_info"] is True
+
+
+def test_load_trade_state_empty_asset_id_raises_error(persistence_manager):
+    """Kill mutants #16 & #17: Test that an empty asset_id raises an AssertionError."""
+    with pytest.raises(
+        AssertionError, match=r"^asset_id must be a non-empty string\.$"
+    ):
+        persistence_manager.load_trade_state("")
+
+
+def test_load_trade_state_json_decode_error_logs_traceback(persistence_manager):
+    """Kill mutant #24: Test that JSONDecodeError on load logs with exc_info=True."""
+    asset_id = "test-asset"
+    mock_file_content = "this is not valid json"
+
+    with patch("os.path.exists", return_value=True):
+        with patch("builtins.open", mock_open(read_data=mock_file_content)):
+            result = persistence_manager.load_trade_state(asset_id)
+
+    assert result == {}
+    persistence_manager.logger.error.assert_called()
+    args, kwargs = persistence_manager.logger.error.call_args
+    assert "exc_info" in kwargs
+    assert kwargs["exc_info"] is True
+
+
+def test_load_trade_state_io_error_logs_traceback(persistence_manager):
+    """Kill mutant #25: Test that IOError on load logs with exc_info=True."""
+    asset_id = "test-asset"
+
+    with patch("os.path.exists", return_value=True):
+        with patch("builtins.open", side_effect=IOError("Permission denied")):
+            result = persistence_manager.load_trade_state(asset_id)
+
+    assert result == {}
+    persistence_manager.logger.error.assert_called()
+    args, kwargs = persistence_manager.logger.error.call_args
+    assert "exc_info" in kwargs
+    assert kwargs["exc_info"] is True
+
+
+def test_save_filled_buy_trade_verifies_data_structure(persistence_manager):
+    """Test that save_filled_buy_trade saves the correct data structure."""
+    asset_id = "BTC-USD"
+    buy_order_id = "buy123"
+    filled_order = {
+        "created_time": "2023-01-01T12:00:00Z",
+        "average_filled_price": "50000.00",
+        "filled_size": "0.1",
+    }
+    sell_orders_params = [{"price": "51000.00", "size": "0.1"}]
+
+    with patch.object(persistence_manager, "save_trade_state") as mock_save:
+        persistence_manager.save_filled_buy_trade(
+            asset_id, buy_order_id, filled_order, sell_orders_params
+        )
+
+    mock_save.assert_called_once()
+    saved_data = mock_save.call_args[0][1]
+    filled_trade = saved_data["filled_buy_trade"]
+
+    assert filled_trade["buy_order_id"] == buy_order_id
+    assert filled_trade["timestamp"] == "2023-01-01T12:00:00Z"
+    assert filled_trade["buy_price"] == "50000.00"
+    assert filled_trade["buy_quantity"] == "0.1"
+    assert filled_trade["associated_sell_orders"] == []
+    assert filled_trade["sell_orders_params"] == sell_orders_params
+
+
+def test_add_sell_order_to_mismatched_buy_trade_logs_error(persistence_manager):
+    """Kill mutant #72: Test error logging for mismatched buy trade."""
+    asset_id = "BTC-USD"
+    correct_buy_id = "buy123"
+    incorrect_buy_id = "buy456"
+    sell_order_details = {"order_id": "sell789"}
+
+    initial_state = {
+        "filled_buy_trade": {
+            "buy_order_id": correct_buy_id,
+            "associated_sell_orders": [],
+        }
+    }
+
+    with patch.object(
+        persistence_manager, "load_trade_state", return_value=initial_state
+    ):
+        with patch.object(persistence_manager, "save_trade_state") as mock_save:
+            with pytest.raises(ValueError):
+                persistence_manager.add_sell_order_to_filled_trade(
+                    asset_id, incorrect_buy_id, sell_order_details
+                )
+
+            persistence_manager.logger.error.assert_called_once()
+            log_args, _ = persistence_manager.logger.error.call_args
+            expected_log_msg = (
+                "Attempted to add sell order to non-matching or "
+                f"non-existent buy trade for {asset_id} "
+                f"(expected {incorrect_buy_id}, found {correct_buy_id})."
+            )
+            assert log_args[0] == expected_log_msg
+            mock_save.assert_not_called()
+
+
+def test_add_sell_order_to_non_existent_buy_trade_logs_error(persistence_manager):
+    """Kill mutant #73: Test error logging for non-existent buy trade."""
+    asset_id = "BTC-USD"
+    buy_order_id = "buy123"
+    sell_order_details = {"order_id": "sell789"}
+
+    # Simulate load_trade_state returning an empty state
+    with patch.object(persistence_manager, "load_trade_state", return_value={}):
+        with patch.object(persistence_manager, "save_trade_state") as mock_save:
+            with pytest.raises(ValueError):
+                persistence_manager.add_sell_order_to_filled_trade(
+                    asset_id, buy_order_id, sell_order_details
+                )
+
+            persistence_manager.logger.error.assert_called_once()
+            log_args, _ = persistence_manager.logger.error.call_args
+            expected_log_msg = (
+                "Attempted to add sell order to non-matching or "
+                f"non-existent buy trade for {asset_id} "
+                f"(expected {buy_order_id}, found None)."
+            )
+            assert log_args[0] == expected_log_msg
+            mock_save.assert_not_called()
+
+
+def test_update_sell_order_status_not_found_returns_false(persistence_manager):
+    """Kill mutant #97: Test that update returns False if sell order is not found."""
+    asset_id = "BTC-USD"
+    buy_order_id = "buy123"
+    existing_sell_id = "sell789"
+    non_existent_sell_id = "sell000"
+
+    initial_state = {
+        "filled_buy_trade": {
+            "buy_order_id": buy_order_id,
+            "associated_sell_orders": [
+                {"order_id": existing_sell_id, "status": "open"}
+            ],
+        }
+    }
+
+    with patch.object(
+        persistence_manager, "load_trade_state", return_value=initial_state
+    ):
+        with patch.object(persistence_manager, "save_trade_state") as mock_save:
+            result = persistence_manager.update_sell_order_status_in_filled_trade(
+                asset_id, buy_order_id, non_existent_sell_id, "filled"
+            )
+
+            assert result is False
+            mock_save.assert_not_called()
+            expected_warning = (
+                f"Sell order {non_existent_sell_id} not found for {asset_id} "
+                "to update status."
+            )
+            persistence_manager.logger.warning.assert_called_with(expected_warning)
+
+
+def test_update_sell_order_stops_after_found(persistence_manager):
+    """Kill mutant #105: Test that the update loop breaks after finding the order."""
+    asset_id = "BTC-USD"
+    buy_order_id = "buy123"
+    sell_order_id_to_update = "sell789"
+
+    initial_state = {
+        "filled_buy_trade": {
+            "buy_order_id": buy_order_id,
+            "associated_sell_orders": [
+                {"order_id": sell_order_id_to_update, "status": "open"},
+                "malformed_entry",  # This would cause an error if the loop continues
+            ],
+        }
+    }
+
+    with patch.object(
+        persistence_manager, "load_trade_state", return_value=initial_state
+    ):
+        with patch.object(persistence_manager, "save_trade_state") as mock_save:
+            try:
+                result = persistence_manager.update_sell_order_status_in_filled_trade(
+                    asset_id, buy_order_id, sell_order_id_to_update, "filled"
+                )
+            except AttributeError:
+                pytest.fail(
+                    "AttributeError was raised, indicating the loop did not break."
+                )
+
+            assert result is True
+            mock_save.assert_called_once()
 
 
 if __name__ == "__main__":

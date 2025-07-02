@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crypto-trading-bot"
+version = "6.0.0"
+description = "A crypto trading bot for Coinbase Advanced Trade."
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.bandit]
+skips = ["B101"]
+
+[tool.mutmut]
+paths_to_mutate = "src/trading"
+runner = "pytest -x"
+tests_dir = "tests/"

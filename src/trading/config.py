@@ -21,6 +21,7 @@ load_dotenv()
 # --- API Configuration ---
 COINBASE_API_KEY: Final[str] = os.getenv("COINBASE_API_KEY", "")
 COINBASE_API_SECRET: Final[str] = os.getenv("COINBASE_API_SECRET", "")
+COINBASE_SANDBOX_API_URL: Final[str] = "api-public.sandbox.pro.coinbase.com"
 
 # Runtime assertions for API keys
 # Rule: Use a minimum of two runtime assertions per function (or module setup in this case).
@@ -34,7 +35,7 @@ LOG_FILE: Final[str] = "v6_trading_bot.log"  # Log file name
 # --- File System Paths ---
 # Define the absolute path for the project's root directory.
 # This ensures that file paths are consistent regardless of the script's execution location.
-PROJECT_ROOT: Final[str] = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT: Final[str] = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Define and create the directory for storing persistence files (e.g., trade states).
 # Using an absolute path prevents ambiguity with the current working directory.

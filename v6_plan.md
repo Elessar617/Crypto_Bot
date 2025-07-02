@@ -1,218 +1,586 @@
 # Plan for Crypto Trading Bot v6
 
-This document outlines the plan for developing version 6 of the crypto trading bot, building upon lessons learned from v5 and the original GDAX_Trader.R script.
+This document outlines the development, maintenance, and testing plan for version 6 of the crypto trading bot.
 
-## I. Core Design Philosophy
+## I. Core Design & Structure
 
-1.  **Modularity:** Break down the bot into logical, independent components to improve manageability and testability.
-2.  **Clarity:** Ensure code within each component is clear, well-commented, and accurately reflects the intended trading strategy.
-3.  **Configuration-Driven:** Utilize clear, centralized configuration for all parameters, product details, and strategy settings.
-4.  **Robustness:** Implement solid error handling, appropriate retry mechanisms for API calls, and comprehensive logging.
-5.  **Testability:** Design components with unit testing in mind from the outset to facilitate a reliable testing suite.
+1.  **Core Strategy:** RSI-based buy signal with a 3-tier profit-taking sell strategy.
+2.  **Execution Model:** A single-pass script, intended for external scheduling (e.g., cron).
+3.  **Modularity:** Code is organized into distinct modules for clarity and testability.
+4.  **Adherence to Rules:** Strict adherence to NASA Power of 10, global coding standards, and use of development tools (mypy, black, flake8, bandit, pytest).
+5.  **Directory Structure:**
+    ```
+    /home/gman/workspace/Crypto-Bots/Active/Single-File/v6/
+    ├── src/
+    │   ├── main.py
+    │   └── trading/          # Core application package
+    ├── tests/                # Test suite
+    ├── pyproject.toml
+    ├── requirements.txt
+    └── v6_plan.md
+    ```
 
-## II. Agreed Design Decisions (Summary from v5 Analysis & Inspiration)
+---
 
-Based on the review of the inspiration article, R-bot, previous v5 Python bot, and user feedback, the following design decisions have been made for the new v6 bot:
+## II. Maintenance & Advanced Testing
 
-1.  **Core Strategy:** Align with the R-bot's RSI-based buy signal and 3-tier profit-taking sell strategy.
-    *   **Buy Signal:** Current 14-period RSI (15-min candles) > 30, previous RSI <= 30, and one of 3 prior RSIs < 30.
-    *   **Sell Strategy:** Upon successful buy, place 3 limit sell orders (e.g., 1/3 at 1% profit, 1/2 of remainder at 4%, rest at 7%).
-2.  **Currency Focus:** BTC-USD, ETH-USD, LTC-USD.
-3.  **Buy Order Execution:** Place a limit buy order. If not filled by the next bot run, the logic will reassess. No rapid retry loop.
-4.  **Position State Persistence:** Upon a successful buy, save the execution price to a simple text file per asset (e.g., `ETH_buy_price.txt`). This file will be used to calculate sell tiers.
-5.  **Initial Buy Amount:** Use a configurable fixed USD amount per trade, per asset.
-6.  **Execution Model:** The bot will be designed as a script that runs, executes one full pass of logic for all configured assets, and then exits. It's intended to be scheduled externally (e.g., via cron).
-7.  **Modularity:** Code will be broken down into specific modules for configuration, API client interaction, technical analysis, trading logic, persistence, and logging.
-8.  **Adherence to Rules:** Strict adherence to NASA Power of 10, global coding standards, and use of development tools (mypy, black, flake8, bandit, pytest).
+This section outlines ongoing efforts to improve the project's structure, stability, and test coverage.
 
-## III. Proposed Directory Structure & File Purposes
+### 1. Mutation Testing
 
-The new bot will reside in `/home/gman/workspace/Crypto-Bots/Active/Single-File/v6/` with the following structure:
+**Objective:** Achieve 100% mutation test coverage on all critical modules using `mutmut` to systematically find and kill surviving mutants.
 
+**Run Command:** `mutmut run --paths-to-mutate trading/<module_name>.py`
+
+#### a. `trading/coinbase_client.py`
+- **Status:** **COMPLETED**
+- **Outcome:** Achieved 100% mutation test coverage. All surviving and suspicious mutants were analyzed and killed by strengthening the test suite with new, targeted tests for edge cases.
+
+#### b. `trading/trade_manager.py`
+- **Status:** **COMPLETED**
+- **Outcome:** All non-equivalent mutants have been killed.
+  - **Killed Mutants:** Added new, focused tests to kill mutants related to local status updates (`#70`), `KeyError` handling in the order placement loop (`#87`, `#89`), and skipping orders with empty IDs (`#52`).
+  - **Tooling Anomalies:** Investigated suspicious mutants (`#16`, `#87`, `#121`) and concluded they are `mutmut` tooling anomalies, not gaps in test coverage.
+  - **Equivalent Mutants:** Analyzed survived mutants (`#63`, `#74`, `#77`) and confirmed they are equivalent, as they do not alter the program's logic.
+
+#### c. `trading/persistence.py`
+- **Status:** **COMPLETED**
+- **Outcome:** All surviving mutants have been killed, achieving 100% mutation test coverage. All mutation-specific tests have been merged into the main test file, and the temporary test file has been deleted.
+  - **Killed Mutants:** Added new tests to target surviving mutants, including tests for input validation, exception logging, and content validation for saved filled buy trades.
+
+#### d. `trading/order_calculator.py`
+- **Status:** **COMPLETED**
+- **Outcome:** Completed a full technical debt cleanup.
+  - **Static Analysis:** Ran `mypy`, `black`, `flake8`, and `bandit` to identify and fix all style, type, and security issues.
+  - **Refactoring:** Removed duplicate test methods, unused imports, and resolved all line-length violations to improve code quality and maintainability.
+  - **Verification:** Confirmed no regressions were introduced by running the full `pytest` suite. All 299 tests pass.
+  - **Mutation Testing:** All mutants have been killed, achieving 100% mutation test coverage.
+
+#### e. `trading/signal_analyzer.py`
+- **Status:** **COMPLETED**
+- **Outcome:** Achieved 100% effective mutation coverage. All non-equivalent, testable mutants were killed by adding new, targeted tests for boundary conditions. Remaining survivors were analyzed and confirmed to be either equivalent (e.g., changes to assertion messages) or untestable due to the project's dual-validation design. All static analysis checks (`black`, `flake8`, `mypy`, `bandit`) passed successfully after the changes.
+
+#### f. `trading/technical_analysis.py`
+- **Status:** **COMPLETED**
+- **Outcome:** All testable, non-equivalent mutants have been killed. The remaining survivors are deemed untestable or equivalent due to the dual-validation design or changes to unreachable defensive code/logging statements.
+
+### 2. Project Cleanup
+- **Status:** **COMPLETED**
+- **Summary:** Performed a comprehensive cleanup of the project repository.
+    *   Consolidated `ROADMAP.md` and `cdp_sdk_reference.md` into this plan.
+    *   Deleted the original `ROADMAP.md` and `cdp_sdk_reference.md` files.
+    *   Removed temporary and generated files, including `.coverage`, `.mutmut-cache`, `.report.json`, and all `__pycache__` directories.
+    *   Reviewed and updated `.gitignore` to prevent generated files and sensitive data from being tracked.
+
+### 3. Code Cleanup & Final Verification
+- **Status:** **COMPLETED**
+- **Summary:** All modules have undergone extensive mutation testing and static analysis. The codebase is now considered stable and fully verified against current testing standards. All subsequent work will focus on the Future Roadmap items.
+- **Final Verification Activities:**
+  - **`trading/technical_analysis.py`:** Completed full mutation testing and passed all static analysis checks (`black`, `flake8`, `mypy`, `bandit`) after adding new tests to kill all testable mutants.
+  - **`trading/signal_analyzer.py`:** Completed full mutation testing and passed all static analysis checks.
+  - **General:** Resolved all `flake8` line-length errors and configured `bandit` to ignore `B101` (assert_used) to align with project standards.
+  - **Logging:** Added an `INFO` level log for the raw API response in `get_public_candles` and removed a stray `print` statement to improve debugging visibility.
+
+---
+
+## III. Current Tasks & Future Roadmap
+
+This section outlines the immediate next steps and high-level goals for future development.
+
+### 1. Current Tasks
+
+*   [X] **Project Structure Refactoring:** Refactored the project into a standard `src` layout for better organization and packaging.
+    *   [X] Created a `src` directory.
+    *   [X] Moved the `trading` package and `main.py` into `src`.
+    *   [X] Updated `pyproject.toml` to support the `src` layout.
+    *   [X] Update all imports to be relative to the new `src` layout.
+
+### 2. Future Roadmap
+
+*   [X] **Test Suite Refactoring:** Consolidated test helpers and fixtures into `tests/conftest.py` to reduce duplication.
+*   [ ] **Final Code Review:** After the file structure refactoring is complete, conduct a final high-level review of the entire codebase.
+*   [ ] **New Features & Enhancements:** Enhance the bot with new strategies, indicators, or performance optimizations.
+
+### 3. Detailed Future Roadmap
+
+This section outlines potential future features and improvements for the trading bot, building upon the stable v6 foundation.
+
+#### Phase 1: Enhanced Strategy & Risk Management
+
+The immediate next steps should focus on making the trading strategy more robust and adding critical risk management features.
+
+- **Implement Stop-Loss Orders:** After a successful buy, automatically place a stop-loss order at a configurable percentage below the buy price to limit potential losses.
+- **Add More Technical Indicators:** Integrate additional indicators like MACD (Moving Average Convergence Divergence) and Bollinger Bands. This will allow for the creation of more sophisticated trading signals.
+- **Dynamic Strategy Selection:** Refactor the trading logic to allow users to select from multiple predefined strategies in `config.py`. This would enable switching between an `RSI_Strategy` and a `MACD_Strategy` without code changes.
+- **Trailing Stop-Loss:** For more advanced risk management, implement trailing stop-losses that automatically adjust upwards as the price increases, locking in profits.
+
+#### Phase 2: Analytics & Performance Tracking
+
+To properly evaluate the bot's effectiveness, we need better tools for tracking its performance.
+
+- **Upgrade to Database Persistence:** Transition from flat text files to a more robust SQLite database. This would store a full history of all trades, orders, and bot activity, enabling complex queries and analysis.
+- **Performance Analytics Module:** Create a new module (`analytics.py`) that can read from the database and calculate key performance indicators (KPIs):
+  - Total Profit & Loss (P&L)
+  - P&L per trading pair
+  - Win/Loss Ratio
+  - Sharpe Ratio
+- **Generate Reports:** Add functionality to generate simple daily or weekly performance reports in text or HTML format.
+
+#### Phase 3: Usability & Monitoring
+
+Improve the user experience and provide better tools for real-time monitoring.
+
+- **Notification Service:** Integrate with a service like Telegram, Discord, or email to send real-time alerts for:
+  - Successful buy/sell orders
+  - Critical errors or API failures
+  - Daily performance summaries
+- **Web Dashboard (Advanced):** For a more polished solution, develop a simple, read-only web dashboard using a lightweight framework like Flask or Dash. The dashboard could visualize:
+  - Current open positions
+  - Recent trade history
+  - Live P&L
+  - Bot status and logs
+
+#### Phase 4: Advanced Capabilities
+
+These are long-term goals that would significantly expand the bot's capabilities.
+
+- **Backtesting Engine:** This is a crucial feature for any serious trading system. A backtester would allow for simulating trading strategies on historical market data to evaluate their effectiveness and optimize parameters before risking real capital.
+- **Multi-Exchange Support:** Refactor the `coinbase_client.py` module to use a generic `ExchangeClient` abstract base class. This would allow for implementing clients for other exchanges (e.g., Binance, Kraken) that conform to the same interface, making the bot exchange-agnostic.
+- **Machine Learning Integration:** As a research-oriented goal, explore the use of machine learning models to forecast price movements or identify optimal entry/exit points, potentially as an additional signal for the existing strategies.
+
+---
+
+## Appendix: Completed Milestones
+
+This section archives the historical progress of the project for reference.
+
+### 1. Initial V6 Development
+*   **[X] Overall Setup & Foundation**
+*   **[X] Static Analysis & Code Quality**
+*   **[X] Module: `logger.py`**
+*   **[X] Module: `config.py`**
+*   **[X] Module: `coinbase_client.py`**
+*   **[X] Module: `technical_analysis.py`**
+*   **[X] Module: `persistence.py`**
+*   **[X] Package: `trading/`**
+*   **[X] Module: `main.py`**
+*   **[X] Final Review and Refinement**
+
+### 2. Major Refactoring & Cleanup
+*   **[X] Structural Refactoring:** Consolidated all core logic into the `trading/` package, standardized on absolute imports, and resolved all resulting test failures and `ModuleNotFoundError` issues.
+*   **[X] Persistence Layer Refactor:** Replaced the procedural `persistence.py` with a class-based `PersistenceManager` and updated all dependent code and tests.
+*   **[X] Re-implementation of Retry Logic:** Re-implemented the API call retry logic in `coinbase_client.py` with an exponential backoff strategy and ensured all tests pass.
+*   **[X] Final Verification:** Ran the full `pytest` suite and all static analysis tools (`mypy`, `flake8`, `bandit`) to confirm the codebase is stable and clean after all refactoring.
+*   **[X] Run main.py and verify runtime**
+
+### 3. Final Stabilization and Regression Fixes
+*   **[X] Final Static Analysis:** Completed a full round of `flake8` and `bandit` checks, fixing all remaining linting errors and security warnings related to temporary directory usage.
+*   **[X] Regression Testing:** Identified and fixed several test regressions that appeared after major commits.
+    *   Resolved `TypeError` in `tests/test_main.py` related to `pytest` fixtures in `unittest` classes by switching to the `tempfile` module.
+    *   Fixed `AttributeError` in `tests/test_persistence.py` by correcting fixture usage in test method signatures.
+    *   Corrected `AssertionError` in `test_run_bot_success` by fixing mock argument order and assertions.
+*   **[X] Codebase Stability:** Confirmed the codebase is stable, with all 277 tests passing and all static analysis tools running clean.
+
+---
+
+## Appendix: Comprehensive CDP SDK Python Reference
+
+## Table of Contents
+1. [Installation and Configuration](#installation-and-configuration)
+2. [Wallet Management](#wallet-management)
+3. [Address Operations](#address-operations)
+4. [Transfers](#transfers)
+5. [Trades](#trades)
+6. [Smart Contract Interactions](#smart-contract-interactions)
+7. [Token Deployments](#token-deployments)
+8. [Message Signing](#message-signing)
+9. [Faucet Operations](#faucet-operations)
+10. [Balance Operations](#balance-operations)
+11. [Transaction Status](#transaction-status)
+
+## Installation and Configuration
+
+### Installation
+
+Install the CDP SDK using pip.
+
+```bash
+pip install cdp-sdk
 ```
-/home/gman/workspace/Crypto-Bots/Active/Single-File/v6/
-├── main.py                 # Main entry point, orchestrates bot execution cycle.
-├── config.py               # Holds all static configurations (trading pairs, RSI settings, file paths, etc.) and loads API keys from environment variables.
-├── coinbase_client.py      # Thin wrapper for all Coinbase API interactions (getting data, placing orders).
-├── technical_analysis.py   # Functions for calculating technical indicators (e.g., RSI).
-├── trading_logic.py        # Core decision-making: should_buy, determine_sell_orders, manage trade cycle per asset.
-├── persistence.py          # Simple functions to save/load the initial buy price for an asset.
-├── logger.py               # Basic logging setup and utility functions.
-├── requirements.txt        # Python package dependencies.
-├── .gitignore              # Specifies intentionally untracked files that Git should ignore.
-└── v6_plan.md              # This planning document.
+
+### Importing the SDK
+
+Import all components from the CDP SDK.
+
+```python
+from cdp import *
 ```
 
-### File Purposes:
+### Configuring the SDK
 
-*   **`main.py`**: Orchestrates the bot's lifecycle. Initializes components, iterates through configured trading pairs, and calls functions from `trading_logic.py`.
-*   **`config.py`**: Centralized configuration. Includes API key loading (from environment variables), definitions for trading pairs (BTC-USD, ETH-USD, LTC-USD) with their specific parameters (RSI settings, profit tiers, min trade sizes, candle granularity, buy price file names).
-*   **`coinbase_client.py`**: Provides an abstraction layer over the `coinbase-advanced-py` library. Contains functions like `get_account_balance`, `get_product_candles`, `get_order_book`, `place_limit_order`, `cancel_order`, `get_open_orders`. Each function will handle API call specifics and basic error checking.
-*   **`technical_analysis.py`**: Implements functions to calculate necessary technical indicators. The primary one will be `calculate_rsi` based on the logic derived from the R-bot (14-period, 15-min candles, specific entry conditions).
-*   **`trading_logic.py`**: Contains the core intelligence. Functions like `should_buy_asset` (evaluates RSI conditions), `determine_sell_orders` (calculates tiered sell prices and sizes), and `process_asset_trade` (manages the buy/sell cycle for a single asset).
-*   **`persistence.py`**: Handles the simple file I/O for storing and retrieving the buy price of an asset (e.g., `save_buy_price(asset_id, price)`, `load_buy_price(asset_id)`).
-*   **`logger.py`**: Configures a simple logger (e.g., using Python's `logging` module) to output information about bot actions, decisions, and errors to the console and/or a log file.
-*   **`requirements.txt`**: Lists all Python dependencies with their specific versions for reproducible environments.
-*   **`.gitignore`**: Standard git ignore file, including `.env`, `*_buy_price.txt`, `__pycache__`, virtual environment folders, IDE files, and log files.
-*   **`v6_plan.md`**: This document, outlining the project goals, analysis, design, and progress.
+Configure the SDK with your API key credentials.
 
-## IV. Implementation Plan & Progress
+```python
+Cdp.configure(api_key_name: str, api_key_private_key: str) -> None
+```
 
-This section tracks the development progress of the Crypto Trading Bot v6.
+- `api_key_name`: Your API key name
+- `api_key_private_key`: Your API key's private key
 
-**1. Overall Setup & Foundation:**
-*   [X] Finalize and approve initial plan.
-*   [X] Create `/home/gman/workspace/Crypto-Bots/Active/Single-File/v6/` directory structure.
-*   [X] Develop `requirements.txt` and set up virtual environment.
-*   [X] Implement `.gitignore`.
-*   **[X] Static Analysis & Code Quality:**
-    *   [X] `mypy`: All Python files successfully pass type checks.
-    *   [X] `flake8`: All Python files conform to style and quality guidelines.
-    *   [X] `bandit`: Security analysis performed.
-        *   Findings in `coinbase_client.py` (B101 `assert_used`) reviewed and acknowledged as intentional.
-        *   Findings in `tests/test_coinbase_client.py` (B108, B105, B106) addressed using `tempfile` and `#nosec` comments.
-    *   [X] `pytest`: All 56 unit tests across the project are passing.
+Example:
+```python
+api_key_name = "Your API key name"
+api_key_private_key = "Your API key's private key"
+Cdp.configure(api_key_name, api_key_private_key)
+```
 
-**2. Module: `logger.py`**
-*   [X] Implement `logger.py` for console and file logging.
-*   [X] Develop `tests/test_logger.py` with comprehensive unit tests.
-*   [X] All tests passing.
+Alternatively, configure from a JSON file.
 
-**3. Module: `config.py`**
-*   [X] Implement `config.py` for static configurations and API key loading from environment variables.
-*   [X] Develop `tests/test_config.py` with unit tests.
-*   [X] All tests passing.
+```python
+Cdp.configure_from_json(json_file_path: str) -> None
+```
 
-**4. Module: `coinbase_client.py`**
-*   [X] Implement `coinbase_client.py` as a thin wrapper for Coinbase Advanced Trade API interactions.
-*   [X] Develop `tests/test_coinbase_client.py` with comprehensive unit tests covering:
-    *   [X] Initialization (success and failure).
-    *   [X] `_generate_client_order_id`.
-    *   [X] `get_accounts` (success, empty response, API error, unexpected format).
-    *   [X] `get_product_candles` (success, empty response, API error, invalid granularity, unexpected format).
-    *   [X] `get_product_book` (success, API error, unexpected format).
-    *   [X] `limit_order_buy` (success, API error, insufficient funds).
-    *   [X] `limit_order_sell` (success, API error, insufficient funds).
-    *   [X] `cancel_orders` (success, API error, no orders to cancel).
-    *   [X] `get_product` (success, API error).
-    *   [X] `get_order` (success, API error).
-*   [X] All tests passing.
+- `json_file_path`: Path to the JSON file containing your API key
 
-**5. Module: `technical_analysis.py`**
-*   [X] **Implement `calculate_rsi(candles_df: pd.DataFrame, period: int = 14) -> Optional[pd.Series]`:**
-    *   Handles empty or insufficient data.
-    *   Correctly computes RSI using `ta` library.
-*   [X] **Implement `calculate_sma(candles_df: pd.DataFrame, period: int = 20) -> Optional[pd.Series]`:**
-    *   Handles empty or insufficient data.
-    *   Correctly computes SMA using `ta` library.
-*   [X] **Implement `add_rsi_to_dataframe(candles_df: pd.DataFrame, rsi_period: int = 14) -> pd.DataFrame`:**
-    *   Adds 'rsi' column to the DataFrame.
-    *   Handles cases where RSI cannot be calculated.
-*   [X] Develop `tests/test_technical_analysis.py` with comprehensive unit tests covering:
-    *   [X] `calculate_rsi` (valid data, empty data, insufficient data, data type checks).
-    *   [X] `calculate_sma` (valid data, empty data, insufficient data, data type checks).
-    *   [X] `add_rsi_to_dataframe` (valid data, RSI calculation success, RSI calculation failure).
-*   [X] Improve test coverage for `technical_analysis.py` (Target: 100%, Achieved: 94% - generic exception handlers for RSI/SMA missed, deemed acceptable).
-*   [X] All tests passing.
+Example:
+```python
+Cdp.configure_from_json("~/Downloads/cdp_api_key.json")
+```
 
-**6. Module: `persistence.py`**
-*   Manages the state of trades (open buy orders, filled buy trades) using JSON files per asset (e.g., `BTC-USD_trade_state.json`).
-*   [X] **Implement `save_trade_state(asset_id: str, state_data: Dict) -> None`:**
-    *   [X] Saves the provided `state_data` dictionary to `[asset_id]_trade_state.json`.
-*   [X] **Implement `load_trade_state(asset_id: str) -> Dict`:**
-    *   [X] Loads trade state from `[asset_id]_trade_state.json`.
-    *   [X] Returns an empty dictionary if the file doesn't exist or is invalid.
-*   [X] **Implement helper functions built upon `save/load_trade_state`:**
-    *   [X] `save_open_buy_order(asset_id: str, order_id: str, buy_params: Dict)`
-    *   [X] `load_open_buy_order(asset_id: str) -> Optional[Dict]` (returns dict with order_id and params)
-    *   [X] `clear_open_buy_order(asset_id: str)`
-    *   [X] `save_filled_buy_trade(asset_id: str, trade_details: Dict)` (e.g., price, quantity, timestamp, associated sell order IDs)
-    *   [X] `load_filled_buy_trade(asset_id: str) -> Optional[Dict]`
-    *   [X] `clear_filled_buy_trade(asset_id: str)`
-    *   [X] `add_sell_order_to_filled_trade(asset_id: str, sell_order_id: str)`
-    *   [X] `update_sell_order_status_in_filled_trade(asset_id: str, sell_order_id: str, status: str)`
-*   [X] **Develop `tests/test_persistence.py`:**
-    *   [X] Mock file system operations (`open`, `os.path.exists`, `os.remove`, `json.dump`, `json.load`).
-    *   [X] Test all save, load, and clear operations for both open buy orders and filled buy trades.
-    *   [X] Test scenarios: file exists, file doesn't exist, corrupted file (if feasible to simulate).
-    *   [X] All tests passing.
+## Wallet Management
 
-**7. Module: `trading_logic.py`**
-*   [X] **Implement `should_buy_asset(rsi_series: Optional[pd.Series], config_asset_params: Dict) -> bool`:**
-    *   [X] Conditions: Current 14-period RSI (15-min candles) > 30, Previous RSI <= 30, One of 3 prior RSIs < 30.
-    *   [X] Input validation: `rsi_series` not None, length >= 5. `config_asset_params` has `buy_rsi_threshold` (numeric, 0-100).
-    *   [X] Assertions for all validations.
-    *   [X] **Develop tests in `tests/test_trading_logic.py`:**
-        *   [X] Test cases for conditions met, not met (each condition failing), invalid inputs (None series, short series, missing/invalid config).
-*   [X] **Implement `should_sell_asset(asset_id: str, current_price: float, coinbase_client: CoinbaseClient, persistence_manager: PersistenceManager, config_asset_params: Dict) -> Tuple[bool, Optional[str], Optional[Dict]]`:**
-    *   [X] Retrieves filled buy trade details using `persistence_manager.load_filled_buy_trade(asset_id)`.
-    *   [X] If no filled trade, returns `(False, None, None)`.
-    *   [X] Calculates stop-loss and take-profit prices based on `buy_price` from trade details and `stop_loss_percentage`, `take_profit_percentage` from `config_asset_params`.
-    *   [X] Returns `(True, "stop_loss", trade_details)` if `current_price <= stop_loss_price`.
-    *   [X] Returns `(True, "take_profit", trade_details)` if `current_price >= take_profit_price`.
-    *   [X] Otherwise, returns `(False, None, None)`.
-    *   [X] Input validation and assertions (asset_id, current_price, config params, trade details content).
-    *   [X] **Develop tests in `tests/test_trading_logic.py`:**
-        *   [X] Test cases: no filled trade, stop-loss triggered, take-profit triggered, neither triggered, invalid inputs/config, missing buy_price in trade details.
-        *   [X] Use `math.isclose` for float comparisons.
-*   [X] **Implement `determine_sell_orders_params(buy_price: float, buy_quantity: float, product_details: Dict, config_asset_params: Dict) -> List[Dict]`:**
-    *   Calculates 3-tier sell prices and quantities based on `config_asset_params` profit tiers.
-    *   Adjusts quantities to meet `product_details` (base_increment, quote_increment, min_order_size).
-    *   Returns a list of dictionaries, each with `price` and `size` for a limit sell order.
-*   [X] **Implement `process_asset_trade_cycle(asset_id: str, client: CoinbaseClient, ta_module, persistence_module, config_module, logger_instance)`:**
-    *   **Load State:** Use `persistence_module` to load `open_buy_order` and `filled_buy_trade`.
-    *   **Handle Filled Buy Trade (Sell Logic):**
-        *   If a `filled_buy_trade` exists:
-            *   Check status of its associated sell orders using `client.get_order`. Update status in persistence.
-            *   If no sell orders were placed yet (or all failed/cancelled):
-                *   Fetch `product_details` using `client.get_product`.
-                *   Call `determine_sell_orders_params`.
-                *   Place sell orders using `client.limit_order_sell`. Store their IDs in persistence.
-            *   If all sell orders are filled, `clear_filled_buy_trade` and log completion.
-    *   **Handle Open Buy Order (Buy Order Management):**
-        *   Else if an `open_buy_order` exists:
-            *   Check its status using `client.get_order(order_id)`.
-            *   If filled: `clear_open_buy_order`, `save_filled_buy_trade` (with actual fill details: price, quantity, timestamp). Log buy success. Then, immediately attempt to place sell orders (as above).
-            *   If still open: Log and wait for the next run.
-            *   If cancelled/failed: `clear_open_buy_order`. Log failure.
-    *   **Handle No Active Trade/Order (Buy Signal Check):**
-        *   Else (no filled trade and no open buy order):
-            *   Fetch candles using `client.get_product_candles`. Convert to DataFrame.
-            *   Calculate RSI using `ta_module.calculate_rsi`.
-            *   Fetch `product_details` using `client.get_product`.
-            *   If `should_buy_asset` is true:
-                *   (Potentially check account balance for quote currency via `client.get_accounts`).
-                *   Calculate buy order size based on `config_asset_params.buy_amount_usd` and current market price (e.g., from `client.get_product_book` or last candle close). Adjust for `base_increment`.
-                *   Place limit buy order using `client.limit_order_buy`.
-                *   If order placement successful, `save_open_buy_order` to persistence.
-*   [X] **Develop `tests/test_trading_logic.py` (including `tests/test_trading_logic_process.py`):**
-    *   [X] Mock all dependencies (`CoinbaseClient`, `technical_analysis`, `persistence`, `config`).
-    *   [X] Test `should_buy_asset` with various RSI series.
-    *   [X] Test `determine_sell_orders_params` for correct price/quantity calculations and adjustments.
-    *   [X] Test `process_asset_trade_cycle` through various scenarios (covered in `test_trading_logic_process.py`):
-        *   [X] No existing trade -> buy signal -> buy order placed.
-        *   [X] Open buy order -> filled -> sell orders placed.
-        *   [X] Open buy order -> still open.
-        *   [X] Filled buy trade -> sell orders placed.
-        *   [X] Filled buy trade -> one sell order filled.
-        *   [X] Filled buy trade -> all sell orders filled.
+### Creating a Wallet
 
-**8. Module: `main.py`**
-*   [X] **Implement `run_bot()` function:**
-    *   Initializes `CoinbaseClient`, logger, and loads configuration from `config.py`.
-    *   Iterates through `TRADING_PAIRS` defined in `config.py`.
-    *   For each `asset_id` and its `asset_config`:
-        *   Calls `trading_logic.process_asset_trade_cycle`.
-    *   Includes top-level try-except block for graceful error handling and logging.
-*   [X] **Implement `if __name__ == "__main__":` block to call `run_bot()`.**
-*   [X] **Develop `tests/test_main.py`:**
-    *   Mock `trading_logic.process_asset_trade_cycle` and other initializations.
-    *   Test that `process_asset_trade_cycle` is called for each configured asset.
-    *   Test overall error handling if `run_bot` itself has complex logic.
+Create a new wallet on the default network (Base Sepolia testnet).
 
-**9. Final Review and Refinement**
-*   [X] Review all code for adherence to NASA Power of 10 and other user-defined coding standards.
-*   [X] Run all linters (`mypy`, `black`, `flake8`, `bandit`) and address all reported issues.
-*   [X] Ensure all unit tests pass and aim for high test coverage.
-*   [X] Update/create a comprehensive `README.md` for setup, configuration, and execution.
-*   [ ] Manually test the bot in a controlled environment if possible (e.g., with very small amounts or against a sandbox if available, though Coinbase Advanced Trade sandbox is limited).
+```python
+Wallet.create(network_id: str = "base-sepolia") -> Wallet
+```
+
+- `network_id`: Optional network identifier (default is "base-sepolia")
+
+Example:
+```python
+wallet = Wallet.create()
+```
+
+Create a wallet on Base Mainnet.
+
+```python
+Wallet.create(network_id: str = "base-mainnet") -> Wallet
+```
+
+Example:
+```python
+mainnet_wallet = Wallet.create(network_id="base-mainnet")
+```
+
+### Accessing Wallet Addresses
+
+Get the default address of a wallet.
+
+```python
+wallet.default_address -> Address
+```
+
+Example:
+```python
+address = wallet.default_address
+```
+
+Create an additional address in the wallet.
+
+```python
+wallet.create_address() -> Address
+```
+
+Example:
+```python
+new_address = wallet.create_address()
+```
+
+List all addresses in the wallet.
+
+```python
+wallet.addresses -> List[Address]
+```
+
+Example:
+```python
+all_addresses = wallet.addresses
+```
+
+### Exporting and Importing Wallets
+
+Export wallet data for persistence.
+
+```python
+wallet.export_data() -> WalletData
+```
+
+Example:
+```python
+wallet_data = wallet.export_data()
+```
+
+Save wallet seed to a file (for development only).
+
+```python
+wallet.save_seed(file_path: str, encrypt: bool = False) -> None
+```
+
+- `file_path`: Path to save the seed file
+- `encrypt`: Whether to encrypt the seed (default is False)
+
+Example:
+```python
+wallet.save_seed("my_seed.json", encrypt=True)
+```
+
+Import a previously exported wallet.
+
+```python
+Wallet.import_data(wallet_data: WalletData) -> Wallet
+```
+
+- `wallet_data`: Previously exported WalletData object
+
+Example:
+```python
+imported_wallet = Wallet.import_data(wallet_data)
+```
+
+Fetch a wallet by ID.
+
+```python
+Wallet.fetch(wallet_id: str) -> Wallet
+```
+
+- `wallet_id`: ID of the wallet to fetch
+
+Example:
+```python
+fetched_wallet = Wallet.fetch(wallet_id)
+```
+
+Load a saved wallet seed.
+
+```python
+wallet.load_seed(file_path: str) -> None
+```
+
+- `file_path`: Path to the saved seed file
+
+Example:
+```python
+fetched_wallet.load_seed("my_seed.json")
+```
+
+## Address Operations
+
+### Creating External Addresses
+
+Create an External Address object.
+
+```python
+ExternalAddress(network_id: str, address: str) -> ExternalAddress
+```
+
+- `network_id`: Network identifier
+- `address`: Address string
+
+Example:
+```python
+external_address = ExternalAddress("base-sepolia", "0x123456789abcdef...")
+```
+
+### Viewing Address IDs
+
+Get the hexadecimal string representation of an address.
+
+```python
+address.address_id -> str
+```
+
+Example:
+```python
+address_id = address.address_id
+```
+
+### Listing Address Historical Balances
+
+View historical balances of an asset for an address.
+
+```python
+address.historical_balances(asset_id: str) -> List[Dict]
+```
+
+- `asset_id`: Asset identifier (e.g., "eth", "usdc")
+
+Example:
+```python
+historical_balances = address.historical_balances("usdc")
+```
+
+### Listing Address Transactions
+
+View all transactions for a specific address.
+
+```python
+address.transactions() -> List[Transaction]
+```
+
+Example:
+```python
+transactions = address.transactions()
+```
+
+## Transfers
+
+### Performing a Transfer
+
+Transfer an asset from one wallet to another.
+
+```python
+wallet.transfer(amount: Union[int, float, Decimal], asset_id: str, destination: Union[str, Address, Wallet], gasless: bool = False) -> Transfer
+```
+
+- `amount`: Amount to transfer
+- `asset_id`: Asset identifier (e.g., "eth", "usdc")
+- `destination`: Recipient's address, wallet, or ENS/Basename
+- `gasless`: Whether to perform a gasless transfer (only for USDC, EURC, cbBTC on Base Mainnet)
+
+Example:
+```python
+transfer = wallet.transfer(0.00001, "eth", another_wallet)
+transfer.wait()
+```
+
+### Gasless Transfer
+
+Perform a gasless transfer of USDC on Base Mainnet.
+
+```python
+mainnet_wallet.transfer(amount: Union[int, float, Decimal], asset_id: str, destination: Union[str, Address, Wallet], gasless: bool = True) -> Transfer
+```
+
+Example:
+```python
+gasless_transfer = mainnet_wallet.transfer(0.000001, "usdc", another_wallet, gasless=True)
+gasless_transfer.wait()
+```
+
+### Transfer to ENS or Basename
+
+Transfer assets to an ENS or Basename address.
+
+```python
+wallet.transfer(amount: Union[int, float, Decimal], asset_id: str, destination: str) -> Transfer
+```
+
+Example:
+```python
+ens_transfer = wallet.transfer(0.00001, "eth", "my-ens-name.base.eth")
+ens_transfer.wait()
+```
+
+## Trades
+
+### Performing a Trade
+
+Trade one asset for another on Base Mainnet.
+
+```python
+wallet.trade(amount: Union[int, float, Decimal], from_asset_id: str, to_asset_id: str) -> Trade
+```
+
+- `amount`: Amount of the source asset to trade
+- `from_asset_id`: Source asset identifier
+- `to_asset_id`: Destination asset identifier
+
+Example:
+```python
+trade = mainnet_wallet.trade(0.00001, "eth", "usdc")
+trade.wait()
+```
+
+### Trading Full Balance
+
+Trade the full balance of one asset for another.
+
+```python
+wallet.trade(amount: Union[int, float, Decimal], from_asset_id: str, to_asset_id: str) -> Trade
+```
+
+Example:
+```python
+trade2 = mainnet_wallet.trade(mainnet_wallet.balance("usdc"), "usdc", "weth")
+trade2.wait()
+```
+
+## Smart Contract Interactions
+
+### Invoking a Contract
+
+Invoke a smart contract method.
+
+```python
+wallet.invoke_contract(contract_address: str, method: str, args: Dict[str, Any], abi: Optional[List[Dict]] = None) -> Invocation
+```
+
+- `contract_address`: Address of the smart contract
+- `method`: Name of the method to invoke
+- `args`: Arguments for the method
+- `abi`: Optional ABI if not using a standard interface (ERC-20, ERC-721, ERC-1155)
+
+Example (ERC-721 NFT transfer):
+```python
+invocation = wallet.invoke_contract(
+    contract_address="0xYourNFTContractAddress",
+    method="transferFrom",
+    args={"from": "0xFrom", "to": "0xmyEthereumAddress", "tokenId": "1000"}
+).wait()
+```
+
+Example (Arbitrary contract):
+```python
+abi = [
+    {
+        "inputs": [
+            {"internalType": "address", "name": "to", "type": "address"},
+            {"internalType": "uint256", "name": "value", "type": "uint256"}
+        ],
+        "name": "transfer",
+        "outputs": [{"internalType": "uint256", "name": '', "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]
+
+invocation = wallet.invoke_contract(
+    contract_address="0xYourContract",
+    abi=abi,
+    method="transfer",
+    args={"to": "0xRecipient", "value": "1000"}
+).wait()
+```
+
+## Token Deployments
+
+### Deploying ERC-20 Token
+
+Deploy an ERC-20 token contract.
+
+```python
+wallet.deploy_token(name: str, symbol: str, initial_supply: int) -> DeployedContract
+```
+
+- `name`: Name of the token
+- `symbol`: Symbol of the token
+- `initial_supply`: Initial token supply
+
+Example:
+```python
+deployed_contract = wallet.deploy_token("ExampleCoin", "EXAM", 100000)
+deployed_contract.wait()
+```

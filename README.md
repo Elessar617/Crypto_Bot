@@ -75,27 +75,40 @@ Create a `.env` file in the project root by copying the example file:
 cp .env.example .env
 ```
 
-Edit the `.env` file and add your Coinbase API Key and Secret:
+Edit the `.env` file and add your Coinbase Advanced Trade API Key and Secret. The secret key must be pasted exactly as provided by Coinbase, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines, with `\n` representing the newlines.
+
 ```
-API_KEY="your_coinbase_api_key"
-API_SECRET="your_coinbase_api_secret"
+COINBASE_API_KEY="your_coinbase_api_key"
+COINBASE_API_SECRET="-----BEGIN PRIVATE KEY-----\nYOUR_MULTI_LINE_SECRET\n-----END PRIVATE KEY-----"
 ```
 
 ## 6. Configuration
 
-All trading parameters can be adjusted in `config.py`. Key settings include:
+All trading parameters are defined in the `TRADING_PAIRS` dictionary within `config.py`. Each key in this dictionary is a product ID (e.g., "ETH-USD"), and the value is a `TradingPairConfig` dictionary with specific settings for that asset.
 
-- `TRADING_PAIRS`: A list of products to trade (e.g., `['ETH-USD', 'BTC-USD']`).
-- `QUOTE_CURRENCY_PER_TRADE`: The amount in the quote currency (e.g., USD) to use for each buy order.
-- `RSI_PERIOD`, `RSI_OVERSOLD`: Parameters for the RSI calculation.
-- `PROFIT_TIERS`: The percentage profit and position portion for the tiered sell orders.
+Key parameters for each trading pair include:
+- `product_id`: The trading pair identifier (e.g., "ETH-USD").
+- `rsi_period`: The lookback period for the RSI calculation (e.g., 14).
+- `rsi_oversold_threshold`: The RSI level below which the asset is considered for a buy signal (e.g., 30).
+- `fixed_buy_usd_amount`: The fixed amount in USD to use for each buy order.
+- `profit_tiers`: A list of dictionaries defining the tiered profit-taking strategy, including profit percentage and the portion of the asset to sell.
 
 ## 7. How to Run the Bot
 
-Once configured, you can run the bot with a single command:
+### Testing API Connectivity
+
+Before running the main bot, it is highly recommended to test your API credentials using the `test_connection.py` script. This will verify that your `.env` file is set up correctly and that you can successfully connect to the Coinbase API.
 
 ```bash
-python main.py
+python3 test_connection.py
+```
+
+### Running the Main Bot
+
+Once connectivity is confirmed, you can run the bot with a single command:
+
+```bash
+python3 main.py
 ```
 
 The bot will execute one full cycle: fetch data, check for signals, place orders, and then exit. For continuous operation, it should be scheduled to run at regular intervals (e.g., every 15 minutes) using a tool like `cron`.

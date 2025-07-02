@@ -6,26 +6,11 @@ from unittest import mock
 import importlib
 import sys
 
-MODULE_NAME = "config"
-# Determine project root assuming tests are in a subdirectory like 'tests'
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODULE_NAME = "trading.config"
 
 
 class TestConfig(unittest.TestCase):
     """Test suite for configuration loading and validation."""
-
-    @classmethod
-    def setUpClass(cls):
-        """Set up project root for module imports if necessary."""
-        cls.original_sys_path = list(sys.path)
-        cls.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        if cls.project_root not in sys.path:
-            sys.path.insert(0, cls.project_root)
-
-    @classmethod
-    def tearDownClass(cls):
-        """Restore original sys.path."""
-        sys.path = cls.original_sys_path
 
     def setUp(self):
         """Set up a clean environment for testing the config module."""
@@ -79,8 +64,9 @@ class TestConfig(unittest.TestCase):
         except Exception as e:
             self.fail(f"Config loading failed with unexpected error: {e}")
 
+    @mock.patch("dotenv.load_dotenv")
     @mock.patch.dict(os.environ, {"COINBASE_API_SECRET": "test_secret"}, clear=True)
-    def test_api_key_missing(self):
+    def test_api_key_missing(self, mock_load_dotenv):
         """Test AssertionError is raised if COINBASE_API_KEY is missing."""
         # Ensure COINBASE_API_KEY is not in the environment for this test
         if "COINBASE_API_KEY" in os.environ:
@@ -91,20 +77,22 @@ class TestConfig(unittest.TestCase):
         ):
             self._import_config()
 
+    @mock.patch("dotenv.load_dotenv")
     @mock.patch.dict(
         os.environ,
         {"COINBASE_API_KEY": "", "COINBASE_API_SECRET": "test_secret"},
         clear=True,
     )
-    def test_api_key_empty(self):
+    def test_api_key_empty(self, mock_load_dotenv):
         """Test AssertionError is raised if COINBASE_API_KEY is empty."""
         with self.assertRaisesRegex(
             AssertionError, "COINBASE_API_KEY environment variable not set or empty."
         ):
             self._import_config()
 
+    @mock.patch("dotenv.load_dotenv")
     @mock.patch.dict(os.environ, {"COINBASE_API_KEY": "test_key"}, clear=True)
-    def test_api_secret_missing(self):
+    def test_api_secret_missing(self, mock_load_dotenv):
         """Test AssertionError is raised if COINBASE_API_SECRET is missing."""
         if "COINBASE_API_SECRET" in os.environ:
             del os.environ["COINBASE_API_SECRET"]  # Redundant due to clear=True
@@ -114,12 +102,13 @@ class TestConfig(unittest.TestCase):
         ):
             self._import_config()
 
+    @mock.patch("dotenv.load_dotenv")
     @mock.patch.dict(
         os.environ,
         {"COINBASE_API_KEY": "test_key", "COINBASE_API_SECRET": ""},
         clear=True,
     )
-    def test_api_secret_empty(self):
+    def test_api_secret_empty(self, mock_load_dotenv):
         """Test AssertionError is raised if COINBASE_API_SECRET is empty."""
         with self.assertRaisesRegex(
             AssertionError, "COINBASE_API_SECRET environment variable not set or empty."
