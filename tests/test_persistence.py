@@ -355,7 +355,7 @@ class TestPersistenceManager:
     @patch("trading.persistence.PersistenceManager.save_trade_state")
     @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_update_sell_order_status_success(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test sell order status is updated successfully."""
         asset_id = "BTC-USD"
@@ -404,7 +404,7 @@ class TestPersistenceManager:
     @patch("trading.persistence.PersistenceManager.save_trade_state")
     @patch("trading.persistence.PersistenceManager.load_trade_state")
     def test_update_sell_order_status_order_not_found(
-        self, mock_load_trade_state, mock_save_trade_state
+        self, mock_load_trade_state, mock_save_trade_state, persistence_manager
     ):
         """Test update returns False if specific sell order ID is not found."""
         asset_id = "BTC-USD"

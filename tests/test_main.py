@@ -1,7 +1,8 @@
 """Unit tests for main.py module."""
 
 import unittest
-import pytest
+import tempfile
+import shutil
 from unittest.mock import patch, call
 
 # Import the module to be tested
@@ -23,24 +24,24 @@ class TestMainModule(unittest.TestCase):
         mock_get_logger,
         mock_config,
         mock_trade_manager,
-        mock_persistence_manager,
-        mock_coinbase_client,
-        tmp_path,
+        mock_persistence_manager,  # This is the CoinbaseClient mock
+        mock_coinbase_client,  # This is the PersistenceManager mock
     ):
         """Test successful execution of run_bot with multiple assets."""
-        mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
-        mock_config.LOG_LEVEL = "INFO"
-        mock_config.LOG_FILE = "test.log"
-        mock_config.PERSISTENCE_DIR = str(tmp_path)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
+            mock_config.LOG_LEVEL = "INFO"
+            mock_config.LOG_FILE = "test.log"
+            mock_config.PERSISTENCE_DIR = tmp_dir
         mock_logger = mock_get_logger.return_value
-        mock_client_instance = mock_coinbase_client.return_value
+        mock_client_instance = mock_persistence_manager.return_value
         mock_tm_instance = mock_trade_manager.return_value
-        mock_pm_instance = mock_persistence_manager.return_value
+        mock_pm_instance = mock_coinbase_client.return_value
 
         main.run_bot()
 
-        mock_coinbase_client.assert_called_once_with()
-        mock_persistence_manager.assert_called_once_with(logger=mock_logger)
+        mock_persistence_manager.assert_called_once_with()
+        mock_coinbase_client.assert_called_once_with(logger=mock_logger)
 
         mock_trade_manager.assert_called_once_with(
             client=mock_client_instance,
@@ -66,13 +67,14 @@ class TestMainModule(unittest.TestCase):
     @patch("main.get_logger")
     @patch("main.sys.exit")
     def test_run_bot_client_initialization_failure(
-        self, mock_exit, mock_get_logger, mock_config, mock_coinbase_client, tmp_path
+        self, mock_exit, mock_get_logger, mock_config, mock_coinbase_client
     ):
         """Test run_bot exits when CoinbaseClient initialization fails."""
-        mock_config.TRADING_PAIRS = ["BTC-USD"]
-        mock_config.LOG_LEVEL = "INFO"
-        mock_config.LOG_FILE = "test.log"
-        mock_config.PERSISTENCE_DIR = str(tmp_path)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_config.TRADING_PAIRS = ["BTC-USD"]
+            mock_config.LOG_LEVEL = "INFO"
+            mock_config.LOG_FILE = "test.log"
+            mock_config.PERSISTENCE_DIR = tmp_dir
         mock_logger = mock_get_logger.return_value
         error_message = "Invalid API keys"
         mock_coinbase_client.side_effect = RuntimeError(error_message)
@@ -97,13 +99,13 @@ class TestMainModule(unittest.TestCase):
         mock_config,
         mock_trade_manager,
         mock_coinbase_client,
-        tmp_path,
     ):
         """Test that an error in one asset doesn't stop the next one."""
-        mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
-        mock_config.LOG_LEVEL = "INFO"
-        mock_config.LOG_FILE = "test.log"
-        mock_config.PERSISTENCE_DIR = str(tmp_path)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
+            mock_config.LOG_LEVEL = "INFO"
+            mock_config.LOG_FILE = "test.log"
+            mock_config.PERSISTENCE_DIR = tmp_dir
         mock_logger = mock_get_logger.return_value
         mock_tm_instance = mock_trade_manager.return_value
         error_message = "Test processing error"
