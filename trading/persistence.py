@@ -150,6 +150,7 @@ class PersistenceManager:
             "associated_sell_orders": [],
             "sell_orders_params": sell_orders_params,
         }
+        trade_state.pop("open_buy_order", None)  # Clear the now-filled open buy order
         trade_state["filled_buy_trade"] = trade_details
         self.save_trade_state(asset_id, trade_state)
 

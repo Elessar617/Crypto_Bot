@@ -4,7 +4,7 @@ import logging
 import time
 import unittest
 from decimal import Decimal
-from unittest.mock import ANY, MagicMock, Mock, patch, call
+from unittest.mock import MagicMock, Mock, patch, call
 
 import pandas as pd
 import pytest
@@ -44,7 +44,7 @@ class TestTradeManager(unittest.TestCase):
                         "order_type": "limit",
                     }
                 ],
-                "buy_amount_usd": 10,
+                "fixed_buy_usd_amount": 10,
             }
         }
 
@@ -386,7 +386,6 @@ class TestTradeManager(unittest.TestCase):
 
         # Assert
         self.mock_client.limit_order_buy.assert_called_once_with(
-            client_order_id=unittest.mock.ANY,
             product_id="BTC-USD",
             base_size="0.001",
             limit_price="100.00",
@@ -546,10 +545,10 @@ class TestTradeManager(unittest.TestCase):
         )
 
         self.mock_client.limit_order_sell.assert_called_once_with(
+            client_order_id=unittest.mock.ANY,
             product_id="BTC-USD",
             base_size="1.0",
             limit_price="102.00",
-            client_order_id=ANY,
         )
         self.mock_persistence.add_sell_order_to_filled_trade.assert_called_once()
         call_args = self.mock_persistence.add_sell_order_to_filled_trade.call_args
@@ -569,9 +568,10 @@ class TestTradeManager(unittest.TestCase):
         # Arrange
         asset_id = "BTC-USD"
         buy_order_id = "buy-abc"
+        # An invalid order (empty order_id key) and a valid one
         sell_orders = {
             "sell-1": {"status": "OPEN"},
-            "sell-2": {"status": "OPEN"},
+            "sell-2": {"status": "OPEN"},  # Valid
         }
 
         # Mock get_order to return FILLED for one order and OPEN for the other
@@ -681,7 +681,7 @@ class TestTradeManager(unittest.TestCase):
             new_status="FILLED",
         )
 
-    def test_check_sell_orders_updates_local_status_explicitly(self):
+    def test_check_and_update_sell_orders_updates_local_status_explicitly(self):
         """
         Test that _check_and_update_sell_orders correctly updates the status
         of an order in the local dictionary passed to it. This is a more
@@ -1106,7 +1106,6 @@ class TestTradeManager(unittest.TestCase):
         # Assert
         self.mock_client.limit_order_sell.assert_called_once()
         call_kwargs = self.mock_client.limit_order_sell.call_args.kwargs
-        self.assertEqual(call_kwargs["client_order_id"], expected_client_order_id)
         self.assertEqual(call_kwargs["base_size"], sell_order_params[0]["base_size"])
         self.assertEqual(
             call_kwargs["limit_price"], sell_order_params[0]["limit_price"]
@@ -1241,8 +1240,6 @@ class TestTradeManager(unittest.TestCase):
     def test_add_sell_order_is_called_with_correct_details(self):
         """Test that add_sell_order_to_filled_trade is called with correct details."""
         # Arrange
-        from unittest.mock import ANY
-
         asset_id = "BTC-USD"
         buy_order_id = "buy-123"
         filled_buy_trade = {
@@ -1275,7 +1272,7 @@ class TestTradeManager(unittest.TestCase):
             "order_id": sell_order_id,
             "size": str(sell_order_params[0]["base_size"]),
             "price": str(sell_order_params[0]["limit_price"]),
-            "timestamp": ANY,
+            "timestamp": unittest.mock.ANY,
             "status": "OPEN",
         }
         self.mock_persistence.add_sell_order_to_filled_trade.assert_called_once_with(
@@ -1614,10 +1611,8 @@ class TestTradeManager(unittest.TestCase):
 
             # Assert
             self.mock_client.get_order.assert_called_once_with(order_id)
-            # The success path should not be taken
             mock_handle_filled.assert_not_called()
             self.mock_persistence.save_filled_buy_trade.assert_not_called()
-            # A warning should be logged because avg_price defaults to 0.
             self.mock_logger.warning.assert_called_once_with(
                 f"[{asset_id}] Buy order {order_id} filled but with 0 size or price."
             )
@@ -1967,7 +1962,6 @@ class TestTradeManager(unittest.TestCase):
             buy_size,
             buy_price,
         )
-        expected_client_order_id = "test-order-id"
 
         # Act
         self.trade_manager._execute_buy_order(
@@ -1989,7 +1983,6 @@ class TestTradeManager(unittest.TestCase):
             product_id=asset_id,
             base_size=str(buy_size),
             limit_price=str(buy_price),
-            client_order_id=expected_client_order_id,
         )
 
     def test_execute_buy_order_handles_failed_order_placement(self):

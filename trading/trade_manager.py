@@ -454,7 +454,9 @@ class TradeManager:
         """Calculates order details and places a new buy order."""
         try:
             buy_details = self.order_calculator.calculate_buy_order_details(
-                buy_amount_usd=Decimal(str(config_asset_params["buy_amount_usd"])),
+                buy_amount_usd=Decimal(
+                    str(config_asset_params["fixed_buy_usd_amount"])
+                ),
                 last_close_price=Decimal(str(candles[-1]["close"])),
                 product_details=product_details,
                 logger=self.logger,
@@ -467,12 +469,11 @@ class TradeManager:
                 return
 
             size, limit_price = buy_details
-            client_order_id = self.client._generate_client_order_id()
+            # Let the client library generate the client_order_id
             order_result = self.client.limit_order_buy(
                 product_id=asset_id,
                 base_size=str(size),
                 limit_price=str(limit_price),
-                client_order_id=client_order_id,
             )
 
             if order_result and order_result.get("success"):

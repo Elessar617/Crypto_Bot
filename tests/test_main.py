@@ -1,6 +1,7 @@
 """Unit tests for main.py module."""
 
 import unittest
+import pytest
 from unittest.mock import patch, call
 
 # Import the module to be tested
@@ -22,11 +23,15 @@ class TestMainModule(unittest.TestCase):
         mock_get_logger,
         mock_config,
         mock_trade_manager,
-        mock_coinbase_client,
         mock_persistence_manager,
+        mock_coinbase_client,
+        tmp_path,
     ):
         """Test successful execution of run_bot with multiple assets."""
         mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
+        mock_config.LOG_LEVEL = "INFO"
+        mock_config.LOG_FILE = "test.log"
+        mock_config.PERSISTENCE_DIR = str(tmp_path)
         mock_logger = mock_get_logger.return_value
         mock_client_instance = mock_coinbase_client.return_value
         mock_tm_instance = mock_trade_manager.return_value
@@ -61,9 +66,13 @@ class TestMainModule(unittest.TestCase):
     @patch("main.get_logger")
     @patch("main.sys.exit")
     def test_run_bot_client_initialization_failure(
-        self, mock_exit, mock_get_logger, mock_config, mock_coinbase_client
+        self, mock_exit, mock_get_logger, mock_config, mock_coinbase_client, tmp_path
     ):
         """Test run_bot exits when CoinbaseClient initialization fails."""
+        mock_config.TRADING_PAIRS = ["BTC-USD"]
+        mock_config.LOG_LEVEL = "INFO"
+        mock_config.LOG_FILE = "test.log"
+        mock_config.PERSISTENCE_DIR = str(tmp_path)
         mock_logger = mock_get_logger.return_value
         error_message = "Invalid API keys"
         mock_coinbase_client.side_effect = RuntimeError(error_message)
@@ -88,9 +97,13 @@ class TestMainModule(unittest.TestCase):
         mock_config,
         mock_trade_manager,
         mock_coinbase_client,
+        tmp_path,
     ):
         """Test that an error in one asset doesn't stop the next one."""
         mock_config.TRADING_PAIRS = ["BTC-USD", "ETH-USD"]
+        mock_config.LOG_LEVEL = "INFO"
+        mock_config.LOG_FILE = "test.log"
+        mock_config.PERSISTENCE_DIR = str(tmp_path)
         mock_logger = mock_get_logger.return_value
         mock_tm_instance = mock_trade_manager.return_value
         error_message = "Test processing error"

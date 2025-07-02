@@ -3,7 +3,7 @@ from __future__ import annotations
 """Module for performing financial calculations for trading."""
 
 import logging
-from decimal import Decimal, InvalidOperation, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -111,16 +111,17 @@ def determine_sell_orders_params(
         assert buy_price > 0, "Buy price must be positive."
         assert buy_quantity > 0, "Buy quantity must be positive."
 
-        sell_profit_tiers = config_asset_params["sell_profit_tiers"]
+        profit_tiers = config_asset_params["profit_tiers"]
 
         # --- Tier Config Validation ---
-        for i, tier in enumerate(sell_profit_tiers):
-            profit_target = Decimal(str(tier["profit_target"]))
-            quantity_percentage = Decimal(str(tier["quantity_percentage"]))
-            assert 0 < profit_target, f"Tier {i+1} profit target must be positive."
-            assert (
-                0 < quantity_percentage <= 1
-            ), f"Tier {i+1} quantity percentage must be between 0 and 1."
+        for i, tier in enumerate(profit_tiers):
+            profit_pct = Decimal(str(tier["profit_pct"]))
+            sell_portion = tier["sell_portion_initial"]
+            assert 0 < profit_pct, f"Tier {i+1} profit target must be positive."
+            if isinstance(sell_portion, (float, int)):
+                assert (
+                    0 < sell_portion <= 1
+                ), f"Tier {i+1} sell portion must be between 0 and 1."
 
         # --- Main Calculation ---
         quote_increment = Decimal(str(product_details["quote_increment"]))
@@ -131,17 +132,18 @@ def determine_sell_orders_params(
         remaining_quantity = total_quantity_to_sell
         sell_order_params = []
 
-        for i, tier in enumerate(sell_profit_tiers):
-            is_last_tier = i == len(sell_profit_tiers) - 1
+        for i, tier in enumerate(profit_tiers):
+            profit_pct = Decimal(str(tier["profit_pct"]))
+            sell_portion = tier["sell_portion_initial"]
 
-            profit_target = Decimal(str(tier["profit_target"]))
-            quantity_percentage = Decimal(str(tier["quantity_percentage"]))
-
-            if is_last_tier:
+            if sell_portion == "all_remaining":
                 quantity_to_sell_unrounded = remaining_quantity
             else:
-                quantity_to_sell_unrounded = (
-                    total_quantity_to_sell * quantity_percentage
+                # Ensure sell_portion is not a string here
+                if isinstance(sell_portion, str):
+                    raise ValueError("sell_portion must be a number for non-last tiers")
+                quantity_to_sell_unrounded = total_quantity_to_sell * Decimal(
+                    str(sell_portion)
                 )
 
             (
@@ -150,7 +152,7 @@ def determine_sell_orders_params(
             ) = _calculate_tier_price_and_size(
                 buy_price,
                 quantity_to_sell_unrounded,
-                profit_target,
+                profit_pct,
                 quote_increment,
                 base_increment,
             )
@@ -180,13 +182,16 @@ def determine_sell_orders_params(
                 }
             )
 
+        if not sell_order_params:
+            logger.warning(f"[{asset_id}] No sell orders were created.")
+
         return sell_order_params
 
     except KeyError as e:
         # Distinguish between an expected missing config and an unexpected one.
-        if "sell_profit_tiers" in str(e):
+        if "profit_tiers" in str(e):
             logger.error(
-                f"[{asset_id}] 'sell_profit_tiers' not found in config_asset_params."
+                f"[{asset_id}] 'profit_tiers' not found in config_asset_params."
             )
         else:
             logger.error(
