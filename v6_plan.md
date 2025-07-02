@@ -11,8 +11,9 @@ This document outlines the development, maintenance, and testing plan for versio
 5.  **Directory Structure:**
     ```
     /home/gman/workspace/Crypto-Bots/Active/Single-File/v6/
-    ├── main.py
-    ├── trading/              # Core application package
+    ├── src/
+    │   ├── main.py
+    │   └── trading/          # Core application package
     ├── tests/                # Test suite
     ├── pyproject.toml
     ├── requirements.txt
@@ -74,12 +75,23 @@ This section outlines ongoing efforts to improve the project's structure, stabil
 
 ---
 
-## III. Future Roadmap
+## III. Current Tasks & Future Roadmap
 
-This section outlines high-level goals for future development.
+This section outlines the immediate next steps and high-level goals for future development.
 
-*   [ ] **Test Suite Refactoring:** Consolidate test helpers and fixtures into `tests/conftest.py` to reduce duplication.
-*   [ ] **Final Code Review:** After all advanced testing is complete, conduct a final review of the entire codebase.
+### 1. Current Tasks
+
+*   [X] **Project Structure Refactoring:** Refactored the project into a standard `src` layout for better organization and packaging.
+    *   [X] Created a `src` directory.
+    *   [X] Moved the `trading` package and `main.py` into `src`.
+    *   [X] Updated `pyproject.toml` to support the `src` layout.
+    *   [ ] Update all imports to be relative to the new `src` layout.
+*   [ ] **Re-implement Retry Logic:** Re-implement the API call retry logic in `coinbase_client.py` with an exponential backoff strategy and ensure all tests pass.
+
+### 2. Future Roadmap
+
+*   [X] **Test Suite Refactoring:** Consolidated test helpers and fixtures into `tests/conftest.py` to reduce duplication.
+*   [ ] **Final Code Review:** After the file structure refactoring is complete, conduct a final high-level review of the entire codebase.
 *   [ ] **New Features & Enhancements:** Enhance the bot with new strategies, indicators, or performance optimizations.
 
 ---
@@ -106,3 +118,11 @@ This section archives the historical progress of the project for reference.
 *   **[X] Re-implementation of Retry Logic:** Re-implemented the API call retry logic in `coinbase_client.py` with an exponential backoff strategy and ensured all tests pass.
 *   **[X] Final Verification:** Ran the full `pytest` suite and all static analysis tools (`mypy`, `flake8`, `bandit`) to confirm the codebase is stable and clean after all refactoring.
 *   **[X] Run main.py and verify runtime**
+
+### 3. Final Stabilization and Regression Fixes
+*   **[X] Final Static Analysis:** Completed a full round of `flake8` and `bandit` checks, fixing all remaining linting errors and security warnings related to temporary directory usage.
+*   **[X] Regression Testing:** Identified and fixed several test regressions that appeared after major commits.
+    *   Resolved `TypeError` in `tests/test_main.py` related to `pytest` fixtures in `unittest` classes by switching to the `tempfile` module.
+    *   Fixed `AttributeError` in `tests/test_persistence.py` by correcting fixture usage in test method signatures.
+    *   Corrected `AssertionError` in `test_run_bot_success` by fixing mock argument order and assertions.
+*   **[X] Codebase Stability:** Confirmed the codebase is stable, with all 277 tests passing and all static analysis tools running clean.

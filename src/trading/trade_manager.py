@@ -9,8 +9,8 @@ from typing import Any, Dict, Optional
 import pandas as pd
 from decimal import Decimal, InvalidOperation
 
-from trading.coinbase_client import CoinbaseClient
-from trading.persistence import PersistenceManager
+from .coinbase_client import CoinbaseClient
+from .persistence import PersistenceManager
 
 
 class TradeManager:

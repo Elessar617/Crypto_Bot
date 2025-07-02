@@ -7,7 +7,7 @@ from typing import Optional
 import pandas as pd  # type: ignore[import]
 import ta  # type: ignore[import] # ta library might not have type stubs
 
-from trading.logger import (
+from .logger import (
     get_logger,
 )  # Assuming logger.py is in the same directory or PYTHONPATH
 

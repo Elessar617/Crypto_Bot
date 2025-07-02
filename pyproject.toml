@@ -8,13 +8,12 @@ version = "6.0.0"
 description = "A crypto trading bot for Coinbase Advanced Trade."
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["trading*"]
+where = ["src"]
 
 [tool.bandit]
 skips = ["B101"]
 
 [tool.mutmut]
-paths_to_mutate = "trading"
+paths_to_mutate = "src/trading"
 runner = "pytest -x"
 tests_dir = "tests/"

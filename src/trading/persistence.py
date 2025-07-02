@@ -5,8 +5,8 @@ import os
 import time
 from typing import Any, Dict, List, Optional, cast
 
-from trading.config import PERSISTENCE_DIR
-from trading.logger import get_logger
+from .config import PERSISTENCE_DIR
+from .logger import get_logger
 
 
 class PersistenceManager:
