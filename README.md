@@ -1,5 +1,9 @@
 # Crypto Trading Bot v6
 
+## Project Status
+
+**This project is an experimental recreation of the bot described in [this markdown article](./original_article.md) and is no longer under active development. It is provided as-is for educational and demonstrational purposes.**
+
 ## 1. Overview
 
 This project is a sophisticated, event-driven cryptocurrency trading bot designed to execute trades on Coinbase based on a defined technical analysis strategy. It is built with a focus on modularity, testability, and robustness, adhering to professional software engineering standards, including the NASA Power of 10 Rules.
